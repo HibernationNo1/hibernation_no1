@@ -1,7 +1,7 @@
 
 import os, os.path as osp
 from pathlib import Path
-from configs.config import ConfigDict, Config
+from .config import ConfigDict, Config
 
 
 
