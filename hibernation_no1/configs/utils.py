@@ -2,9 +2,22 @@
 import os, os.path as osp
 from pathlib import Path
 from .config import ConfigDict, Config
+import json
+import numpy as np
 
 
-
+class NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return super(NpEncoder, self).default(obj)
+        
+        
 def change_to_tuple(org_cfg, boolean_flag_dict):
     """
     org_cfg : original config
@@ -55,13 +68,17 @@ def emptyfile_to_config(cfg_dict, boolean_flag_dict = None, file_path =None, use
         cfg = change_to_tuple(cfg_dict, boolean_flag_dict)
     
     if file_path is None: file_path = "tmp.py"
+    else:
+        if osp.splitext(file_path)[-1] != "py":
+            file_path = osp.splitext(file_path)[0] +".py"
     with open(file_path, 'w') as f:
         f.write('\n')       # 빈 file 생성
         
     if isinstance(file_path, Path):
             file_path = str(file_path)
-    cfg_dict, _ = Config._file2dict(file_path, json_dict = cfg_dict,
-                                           use_predefined_variables= use_predefined_variables)
+    cfg_dict, _ = Config._file2dict(file_path, 
+                                    json_dict = cfg_dict,
+                                    use_predefined_variables= use_predefined_variables)
     return Config(cfg_dict)       
     
     
