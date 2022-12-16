@@ -10,17 +10,22 @@ def create_table(cursor, table_name: str, schema: str):
     """
     cursor.execute(f"SHOW TABLES")
     fetchs = cursor.fetchall()
+    
+    tables = []
     if len(fetchs) !=0:
-        tables = fetchs[0]
-        if table_name not in tables:
-            print(f"  mysql>> create table: {table_name}")
-            cursor.execute(schema)
-        else:
-            print(f"  mysql>> table: {table_name} is already exist!")
+        for fetch in fetchs:
+            tables.append(fetch[0])
     else:
         print(f"  mysql>> create table: {table_name}")
         cursor.execute(schema)
     
+    if len(fetchs) !=0:
+        if table_name not in tables:
+            print(f"  mysql>> create table: {table_name}")
+            cursor.execute(schema)
+        else:
+            print(f"  mysql>> table: {table_name} is already exist!")      
+            
 
 
 def check_table_exist(cursor, tables_cfg):
