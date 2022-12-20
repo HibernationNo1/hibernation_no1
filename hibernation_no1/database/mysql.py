@@ -36,7 +36,9 @@ def check_table_exist(cursor, tables_cfg):
     Args:
         cursor : pymysql.connect.cursor  
         tables_cfg (dict or list or str): table names
+        after_create: whether run immediately after table creation
     """
+    
     if isinstance(tables_cfg, dict):
         table_names = []
         for _, name in tables_cfg.items():
