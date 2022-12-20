@@ -24,7 +24,9 @@ def create_table(cursor, table_name: str, schema: str):
             print(f"  mysql>> create table: {table_name}")
             cursor.execute(schema)
         else:
-            print(f"  mysql>> table: {table_name} is already exist!")      
+            print(f"  mysql>> table: {table_name} is already exist!") 
+    
+    check_table_exist(cursor, table_name)     
             
 
 
