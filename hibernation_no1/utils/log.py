@@ -113,7 +113,7 @@ def collect_env_cuda():
     import cv2
     def is_rocm_pytorch():
         is_rocm = False
-        if TORCH_VERSION != 'parrots':
+        if torch.__version__ != 'parrots':
             try:
                 from torch.utils.cpp_extension import ROCM_HOME
                 is_rocm = True if ((torch.version.hip is not None) and
