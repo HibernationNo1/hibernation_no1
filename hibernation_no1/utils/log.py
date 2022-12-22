@@ -5,11 +5,11 @@ import subprocess
 from collections import defaultdict
 
 
-loggers: dict = {}      
+LOGGERS: dict = {}      
 
 # Example
-# >>> from log import loggers
-# >>>    logger = loggers[log_name]
+# >>> from log import LOGGERS
+# >>>    logger = LOGGERS[log_name]
 
 
 
@@ -36,10 +36,10 @@ def get_logger(name, log_file=None, log_level=logging.INFO, file_mode='w'):
         logging.Logger: The expected logger.
     """
     logger = logging.getLogger(name)
-    if name in loggers:       
+    if name in LOGGERS:       
         return logger
     
-    for logger_name in loggers:
+    for logger_name in LOGGERS:
         if name.startswith(logger_name):
             return logger
         
@@ -68,7 +68,7 @@ def get_logger(name, log_file=None, log_level=logging.INFO, file_mode='w'):
     logger_dict = dict(logger = logger,
                        log_level = log_level,
                        log_file = log_file)
-    loggers[name] = logger_dict
+    LOGGERS[name] = logger_dict
     return logger
     
     

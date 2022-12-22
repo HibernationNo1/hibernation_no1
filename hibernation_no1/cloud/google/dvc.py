@@ -56,8 +56,8 @@ def get_dvc_config(default_remote: str):
     assert len(remotes) == len(urls)
     dvc_cfg['remotes'] = []
     
-    for default_remote, url in zip(remotes, urls):
-        dvc_cfg['remotes'].append(dict(remote = default_remote, url = url))
+    for default, url in zip(remotes, urls):
+        dvc_cfg['remotes'].append(dict(remote = default, url = url))
         
         
     if dvc_cfg['defualt_remote'] != default_remote: 
@@ -97,11 +97,11 @@ def set_gs_credentials(remote: str, bucket_name: str, client_secrets: dict):
     
     remote_bucket_command = f"dvc remote add -d -f {remote} gs://{bucket_name}"
     
-    check_gs_credentials()
-    credentials_command = f"dvc remote modify --local {remote} credentialpath {client_secrets_path}"   
-    
+    credentials_command = f"dvc remote modify --local {remote} credentialpath {client_secrets_path}"     
     subprocess.call([remote_bucket_command], shell=True)
     subprocess.call([credentials_command], shell=True)
+    
+    check_gs_credentials(remote)
     
     return client_secrets_path
 
