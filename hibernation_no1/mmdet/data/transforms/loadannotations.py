@@ -7,7 +7,10 @@ import torch
 
 from hibernation_no1.mmdet.data.transforms.compose import PIPELINES
 from hibernation_no1.mmdet.data.transforms.utils import imresize, imrescale, rescale_size, imflip
-from hibernation_no1.mmdet.modules.maskrcnn.bbox_head import roi_align
+
+from mmcv.ops.roi_align import RoIAlignFunction
+roi_align = RoIAlignFunction.apply
+
 
 cv2_interp_codes = {
     'nearest': cv2.INTER_NEAREST,

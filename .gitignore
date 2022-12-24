@@ -2,5 +2,6 @@ build/
 dist/
 hibernation_no1.egg-info/
 
+tmp.py
 *.log
 *.pyc

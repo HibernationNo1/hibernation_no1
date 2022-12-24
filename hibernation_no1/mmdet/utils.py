@@ -2,7 +2,10 @@ import numpy as np
 import torch
 import collections.abc
 import importlib
+import warnings
 from itertools import repeat
+from getpass import getuser
+from socket import gethostname
 
 
 def to_2tuple(x):
@@ -48,4 +51,74 @@ def load_ext(name, funcs):
     for fun in funcs:
         assert hasattr(ext, fun), f'{fun} miss in module {name}'
     
-    return ext 
+    return ext
+
+
+
+# TODO: using  
+def auto_scale_lr(cfg, logger, num_gpus = 1):   
+    """Automatically scaling LR according to GPU number and sample per GPU.
+
+    Args:
+        cfg (config): whole config.
+        logger (logging.Logger): Logger.
+    """
+    
+    # Get flag from config
+    if ('auto_scale_lr' not in cfg) or \
+            (not cfg.auto_scale_lr.get('enable', False)):
+        logger.info('Automatic scaling of learning rate (LR)'
+                    ' has been disabled.')
+        return
+    
+    # Get base batch size from config
+    base_batch_size = cfg.auto_scale_lr.get('base_batch_size', None)
+    if base_batch_size is None:
+        return
+    
+    batch_size = cfg.data.train_dataloader.samples_per_gpu
+    logger.info(f'Training with {num_gpus} GPU(s). The total batch size is {batch_size}.')
+    
+    if batch_size != base_batch_size:
+        # scale LR with
+        # [linear scaling rule](https://arxiv.org/abs/1706.02677)
+        scaled_lr = (batch_size / base_batch_size) * cfg.optimizer.lr
+        logger.info('LR has been automatically scaled '
+                    f'from {cfg.optimizer.lr} to {scaled_lr}')
+        cfg.optimizer.lr = scaled_lr
+    else:
+        logger.info('The batch size match the '
+                    f'base batch size: {base_batch_size}, '
+                    f'will not scaling the LR ({cfg.optimizer.lr}).') 
+        
+        
+def get_host_info():
+    """Get hostname and username.
+
+    Return empty string if exception raised, e.g. ``getpass.getuser()`` will
+    lead to error in docker container
+    """
+    host = ''
+    try:
+        host = f'{getuser()}@{gethostname()}'
+    except Exception as e:
+        warnings.warn(f'Host or user not found: {str(e)}')
+    finally:
+        return host
+    
+    
+def compute_sec_to_h_d(sec):
+    if sec <=0: return "00:00:00"
+    
+    if sec < 60: return f'00:00:{f"{int(sec)}".zfill(2)}'
+    
+    minute = sec//60
+    if minute < 60: return f"00:{f'{int(minute)}'.zfill(2)}:{f'{int(sec%60)}'.zfill(2)}"
+    
+    hour = minute//60
+    if hour < 24: return f"{f'{int(hour)}'.zfill(2)}:{f'{int(minute%60)}'.zfill(2)}:{f'{int(sec%60)}'.zfill(2)}"
+    
+    day = hour//24
+    return f"{day}day {f'{int(hour%24)}'.zfill(2)}:{f'{int(minute%(60))}'.zfill(2)}:{f'{int(sec%(60))}'.zfill(2)}"
+
+

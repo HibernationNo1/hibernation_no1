@@ -95,9 +95,6 @@ class Config:
                 text = f.read()
         else:
             text = ''
-            
-        self._text = text
-        self._filename = filename
         super().__setattr__('_text', text)
         
     @property
@@ -195,17 +192,43 @@ class Config:
         text = _format_dict(cfg_dict, outest_level=True)
         
         return text
-
-    def __getitem__(self, name):
-        return self._cfg_dict.__getitem__(name)
     
-    def __getattr__(self, name):
-        return getattr(self._cfg_dict, name)
-        
+    
     def __repr__(self):
         return f'Config (path: {self.filename}): {self._cfg_dict.__repr__()}'
     
+    def __len__(self):
+        return len(self._cfg_dict)
+
+    def __getattr__(self, name):
+        return getattr(self._cfg_dict, name)
     
+    def __getitem__(self, name):
+        return self._cfg_dict.__getitem__(name)
+    
+    # for properly conversion when passing `dict(config)`
+    def __setattr__(self, name, value):
+        if isinstance(value, dict):
+            value = ConfigDict(value)
+        self._cfg_dict.__setattr__(name, value)
+        
+    def __setitem__(self, name, value):
+        if isinstance(value, dict):
+            value = ConfigDict(value)
+        self._cfg_dict.__setitem__(name, value)
+    
+    def __iter__(self):
+        return iter(self._cfg_dict)
+        
+    def __getstate__(self):
+        return (self._cfg_dict, self._filename, self._text)
+    
+    def __setstate__(self, state):
+        _cfg_dict, _filename, _text = state
+        super().__setattr__('_cfg_dict', _cfg_dict)
+        super().__setattr__('_filename', _filename)
+        super().__setattr__('_text', _text)
+        
     def __copy__(self):
         cls = self.__class__
         other = cls.__new__(cls)
@@ -222,7 +245,7 @@ class Config:
             super(Config, other).__setattr__(key, copy.deepcopy(value, memo))
 
         return other
-    
+        
     @staticmethod
     def fromfile(filename, use_predefined_variables=True):
         if isinstance(filename, Path):
@@ -268,7 +291,6 @@ class Config:
             warnings.warn(f'{file} is not .py format')
             with open(file, 'w', encoding='utf-8') as f:
                 f.write(self.pretty_text)
-                
                 
     
     @staticmethod

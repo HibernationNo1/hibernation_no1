@@ -2,7 +2,7 @@ import os
 from setuptools import setup, find_packages
 
 # python setup.py bdist_wheel
-# twine upload dist/hibernation_no1-0.1.14-py3-none-any.whl
+# twine upload dist/hibernation_no1-0.2.0-py3-none-any.whl
 
 name_package = "hibernation_no1"
 version_file = os.path.join(os.getcwd(), name_package, 'version.py')             # version이 명시된 file

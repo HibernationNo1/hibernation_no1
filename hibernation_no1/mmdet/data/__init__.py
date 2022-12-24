@@ -1,9 +1,9 @@
 from .api.coco import COCO
 
-from .dataset.datacontainer import DataContainer
-from .dataset.dataloader import build_dataloader
-from .dataset.dataset import build_dataset, CustomDataset
-from .dataset.sampler import GroupSampler
+from .datacontainer import DataContainer
+from .dataloader import build_dataloader
+from .dataset import build_dataset, CustomDataset
+from .sampler import GroupSampler
 
 from .transforms.collect import Collect
 from .transforms.compose import Compose
