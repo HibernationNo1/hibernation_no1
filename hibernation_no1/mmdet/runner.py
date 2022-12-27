@@ -1,11 +1,13 @@
-
+import os, os.path as osp
 import copy
 import time
+import logging
+import numpy as np
 import torch
+from torch.optim import Optimizer
 
 
 from hibernation_no1.mmdet.utils import get_host_info, compute_sec_to_h_d
-from hibernation_no1.mmdet.modules.base.runner import BaseRunner
 from hibernation_no1.mmdet.eval import Evaluate
 
 from hibernation_no1.mmdet.registry import build_from_cfg
@@ -25,14 +27,120 @@ priority_dict = {'HIGHEST' : 0,
 
 def build_runner(cfg: dict):
     runner_cfg = copy.deepcopy(cfg)
-    runner = EpochBasedRunner(**runner_cfg)
+    runner = Runner(**runner_cfg)
  
     return runner
 
 
         
-class EpochBasedRunner(BaseRunner):
-    def run(self, train_dataloader, val_dataloader, flow,
+class Runner:
+    """The base class of Runner, a training helper for PyTorch.
+    Args:
+        model (:obj:`torch.nn.Module`): The model to be run.
+        batch_processor (callable): A callable method that process a data
+            batch. The interface of this method should be
+            `batch_processor(model, data, train_mode) -> dict`
+        optimizer (dict or :obj:`torch.optim.Optimizer`): It can be either an
+            optimizer (in most cases) or a dict of optimizers (in models that
+            requires more than one optimizer, e.g., GAN).
+        work_dir (str, optional): The working directory to save checkpoints
+            and logs. Defaults to None.
+        logger (:obj:`logging.Logger`): Logger used during training.
+             Defaults to None. (The default value is just for backward
+             compatibility)
+        meta (dict | None): A dict records some import information such as
+            environment info and seed, which will be logged in logger hook.
+            Defaults to None.
+        max_epochs (int, optional): Total training epochs.
+        max_iters (int, optional): Total training iterations.
+    """
+    def __init__(self,
+                 model,
+                 iterd_per_epochs,
+                 max_iters=None,
+                 max_epochs=None,
+                 optimizer=None,
+                 work_dir=None,
+                 logger=None,
+                 meta=None,
+                 **kwargs):
+       
+        
+        assert hasattr(model, 'train_step')
+        
+        
+        # check the type of `optimizer`
+        if isinstance(optimizer, dict):
+            for name, optim in optimizer.items():
+                if not isinstance(optim, Optimizer):
+                    raise TypeError(
+                        f'optimizer must be a dict of torch.optim.Optimizers, '
+                        f'but optimizer["{name}"] is a {type(optim)}')
+        elif not isinstance(optimizer, Optimizer) and optimizer is not None:
+            raise TypeError(
+                f'optimizer must be a torch.optim.Optimizer object '
+                f'or dict or None, but got {type(optimizer)}')
+            
+        # check the type of `logger`
+        if not isinstance(logger, logging.Logger):
+            raise TypeError(f'logger must be a logging.Logger object, '
+                            f'but got {type(logger)}')
+
+        # check the type of `meta`
+        if meta is not None and not isinstance(meta, dict):
+            raise TypeError(
+                f'meta must be a dict or None, but got {type(meta)}')
+        
+        self.batch_size = kwargs.get('batch_size', None)
+         
+        self.model = model
+        self.optimizer = optimizer
+        self.logger = logger
+        self.meta = meta
+        self.work_dir = work_dir
+        if work_dir is None: raise TypeError(f"work_dir must be specific, but work_dir is 'None'") 
+        if not os.path.isdir(work_dir): os.makedirs(work_dir, exist_ok=True)
+        
+        # get model name from the model class
+        if hasattr(self.model, 'module'):
+            self._model_name = self.model.module.__class__.__name__
+        else:
+            self._model_name = self.model.__class__.__name__
+        
+        self._rank, self._world_size = 0, 1
+        self.timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
+        self.mode = None
+        self._hooks = []    
+        self._epoch = 1         # current epoch during training
+        self._iter = 1          # current iter during training
+        self._inner_iter = 0    # current iter during epoch
+        
+        self._iterd_per_epochs = iterd_per_epochs
+        if max_epochs is not None and max_iters is not None:
+            raise ValueError(
+                'Only one of `max_epochs` or `max_iters` can be set.')
+        self._max_epochs = max_epochs
+        self._max_iters = max_iters
+        
+        if self._max_epochs is not None:     
+            self._by_epoch = True
+            # expected total iter according to the number of epochs set by the user
+            self._max_iters = self._max_epochs * self._iterd_per_epochs            
+        else: 
+            self._by_epoch = False
+            self._max_epochs = self._max_iters // self._iterd_per_epochs
+            raise ValueError(f"training in iteration units is not yet implemented.")
+  
+        
+        self.log_buffer = LogBuffer()
+        
+        
+        
+        
+    def run(self, 
+            train_dataloader, 
+            val_dataloader = None,
+            val_cfg = None,
             **kwargs):
         """Start running.
 
@@ -44,47 +152,30 @@ class EpochBasedRunner(BaseRunner):
                 running 2 epochs for training and 1 epoch for validation,
                 iteratively.
         """
-        self.val_cfg = kwargs.get('val_cfg', None)
-        self.mask_to_polygon = kwargs.get('mask_to_polygon', None)
-        
-        mode, iter = flow
-        if not isinstance(mode, str): 
-            raise TypeError(f'mode in workflow must be a str, but got {type(mode)}') 
-        if not isinstance(iter, int) : 
-            raise TypeError(f'epoch in workflow must be a int, but got {type(iter)}') 
-                        
-        work_dir = self.work_dir
-        self.logger.info('Start running, host: %s, work_dir: %s',
-                         get_host_info(), work_dir)
-        self.logger.info('Hooks will be executed in the following order:\n%s',
-                         self.get_hook_info())
-        if self._max_epochs is not None:        
-            self.logger.info(f'mode: {mode}, max: {self._max_epochs} epochs')
+        if self._by_epoch: self.logger.info(f'Training in epoch units.   max epochs: {self._max_epochs}')
+        else: self.logger.info(f'Training in iteration units.   max iters: {self._max_iters}')
             
-            # expected total ite according to the number of epochs set by the user
-            self._max_iters = self._max_epochs * len(train_dataloader)            
-        else: raise ValueError(f"epoch must be specified in cfg.workflow, but got None.")   # TODO: Training in epochs unit
-
-        self.iterd_per_epochs = len(train_dataloader)
-        work_dir = self.work_dir
+  
+        self.val_cfg = val_cfg
+        self.mask_to_polygon = self.val_cfg.mask2polygon
+        self.katib_logger = kwargs.get("katib", None)       # for run with katib
         
-        if not hasattr(self, mode):
-            raise ValueError(f'runner has no method named "{mode}" to run an epoch')
+        self.logger.info(f'Start running, host: {get_host_info()}, work_dir: {self.work_dir}')
+        self.logger.info(f'Hooks will be executed in the following order:\n{self.get_hook_info()}')
+        
+          
+
         
         self.call_hook('before_run')
         self.start_time = time.time()
-        if self._max_epochs is not None:        
-            while self.epoch < self._max_epochs:        # Training in epochs unit
-                # epoch_runner = getattr(self, mode)      # call method (train, val, eval)
-                epoch_runner = self.train
-                for _ in range(self._max_epochs):
-                    epoch_runner(train_dataloader, val_dataloader, **kwargs)
-        else:   # TODO: Training in epochs unit
-            
-            while self.iter < self._max_iters:
-                pass
+        if self._by_epoch:        
+            while self._epoch < self._max_epochs:        # Training in epochs unit
+                self.train(train_dataloader, val_dataloader, **kwargs)
+        else:   
+            while self._iter < self._max_iters:
+                # self.train(train_dataloader, val_dataloader, **kwargs)
                 
-            pass
+                pass
         time.sleep(1)  # wait for some hooks like loggers to finish
         self.call_hook('after_run')
         
@@ -118,7 +209,7 @@ class EpochBasedRunner(BaseRunner):
             # data_batch: data of passed by pipelines in dataset and collate train_dataloader
             # data_batch.keys() = ['img_metas', 'img', 'gt_bboxes', 'gt_labels', 'gt_masks']
             self.data_batch = data_batch        
-            self._inner_iter = i
+            self._inner_iter = i+1
             self.call_hook('before_train_iter')
             # self.outputs: 
             # loss:total loss, log_vars: log_vars, num_samples: batch_size
@@ -143,7 +234,7 @@ class EpochBasedRunner(BaseRunner):
         eval = Evaluate(**eval_cfg)   
         mAP = eval.compute_mAP()
         datatime = compute_sec_to_h_d(time.time() - self.start_time)
-        log_str = f"epoch: [{self.epoch}|{self.max_epochs}],    iter: [{self._inner_iter+1}|{self.iterd_per_epochs}]    "
+        log_str = f"epoch: [{self._epoch}|{self._max_epochs}],    iter: [{self._inner_iter}|{self._iterd_per_epochs}]     "
         log_str +=f"mAP={mAP}       datatime={datatime}\n"
         
         katib_logger = kwargs.get("katib_logger", None)
@@ -217,7 +308,7 @@ class EpochBasedRunner(BaseRunner):
 
         for hook_cfg in hook_cfg_list:            
             if hook_cfg.get("priority", None) is None: priority = "VERY_LOW"
-            else: priority = hook_cfg.priority
+            else: priority = hook_cfg.pop("priority")
             
             if hook_cfg.type == 'LoggerHook': hook_cfg.ev_iter = ev_iter
                 
@@ -334,11 +425,11 @@ class EpochBasedRunner(BaseRunner):
         if model_cfg is not None:
             meta.update(model_cfg = model_cfg)
             
-        meta.update(epoch=self.epoch + 1, 
-                    iter=self.iter)
+        meta.update(epoch=self._epoch, 
+                    iter=self._iter)
         
    
-        filename = filename_tmpl.format(self.epoch + 1)
+        filename = filename_tmpl.format(self._epoch)
         filepath = osp.join(out_dir, filename)
         optimizer = self.optimizer if save_optimizer else None
         sc_save_checkpoint(self.model, filepath, optimizer=optimizer, meta=meta)
@@ -397,3 +488,56 @@ class EpochBasedRunner(BaseRunner):
     def max_iters(self):
         """int: Maximum training iterations."""
         return self._max_iters                 
+
+
+
+class LogBuffer:
+
+    def __init__(self):
+        self.val_history = dict()
+        self.n_history = dict()
+        self.output = dict()
+        self.log_output = dict()
+        self.ready = False
+
+    def clear(self) -> None:
+        self.val_history.clear()
+        self.n_history.clear()
+        self.clear_output()
+
+    def clear_output(self) -> None:
+        self.output.clear()
+        self.ready = False
+
+    def update(self, vars: dict, count: int = 1) -> None:
+        assert isinstance(vars, dict)
+        for key, var in vars.items():
+            if key not in self.val_history:
+                self.val_history[key] = []
+                self.n_history[key] = []
+            self.val_history[key].append(var)
+            self.n_history[key].append(count)
+
+    def average(self, n: int = 0) -> None:
+        """Average latest n values or all values."""
+        assert n >= 0
+        for key in self.val_history:
+            values = np.array(self.val_history[key][-n:])
+            nums = np.array(self.n_history[key][-n:])
+            avg = np.sum(values * nums) / np.sum(nums)
+            self.output[key] = avg
+        self.ready = True
+        
+    
+    def log(self, n):
+      
+        for key in self.val_history:
+            values = np.array(self.val_history[key][-n:])
+            nums = np.array(self.n_history[key][-n:])
+            avg = np.sum(values * nums) / np.sum(nums)
+            self.log_output[key] = avg
+    
+    def clear_log(self):
+        self.log_output.clear()
+        
+        

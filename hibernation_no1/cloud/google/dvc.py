@@ -96,9 +96,11 @@ def set_gs_credentials(remote: str, bucket_name: str, client_secrets: dict):
     json.dump(client_secrets, open(client_secrets_path, "w"), indent=4)
     
     remote_bucket_command = f"dvc remote add -d -f {remote} gs://{bucket_name}"
-    
     credentials_command = f"dvc remote modify --local {remote} credentialpath {client_secrets_path}"     
+    
+    print(f"$ {remote_bucket_command}")
     subprocess.call([remote_bucket_command], shell=True)
+    print(f"$ {credentials_command}")
     subprocess.call([credentials_command], shell=True)
     
     check_gs_credentials(remote)
@@ -123,32 +125,32 @@ def dvc_pull(remote: str, bucket_name: str, client_secrets: dict, data_root: str
     
     # check file exist (downloaded from git repo by git clone)
     dvc_path = osp.join(os.getcwd(), f'{data_root}.dvc')          
-    assert os.path.isfile(dvc_path), f"Path: {dvc_path} is not exist!" 
+    assert osp.isfile(dvc_path), f"Path: {dvc_path} is not exist!" 
 
     client_secrets_path = set_gs_credentials(remote, bucket_name, client_secrets)
     
     # download dataset from GS by dvc 
-    subprocess.call(["dvc pull"], shell=True)           
+    dvp_pull_srt = f"dvc pull {data_root}.dvc"
+    print(f"$ {dvp_pull_srt}")
+    subprocess.call([dvp_pull_srt], shell=True)           
     os.remove(client_secrets_path)
     
     dataset_dir_path = osp.join(os.getcwd(), data_root)
-    assert osp.isdir(dataset_dir_path), f"Directory: {dataset_dir_path} is not exist!"\
+    assert osp.isdir(dataset_dir_path), f"Directory: {dataset_dir_path} is not exist!\n"\
         f"list fo dir : {os.listdir(osp.split(dataset_dir_path)[0])}"
     
     return dataset_dir_path
 
 
-def dvc_push(remote: str, bucket_name: str, client_secrets: dict, target_dir: str, dvc_name: str):
-    """_summary_
+
+def dvc_add(target_dir: str, dvc_name: str):
+    """
 
     Args:
-        remote (str): name of remote of dvc
-        bucket_name (str): bucket name of google storage
-        client_secrets (dict): credentials info to access google storage
         target_dir (str): directory path where push to dvc
         dvc_name (str): name of file containing contents about dataset (`.dvc` format)
+
     """
-    
     if platform.system() != "Linux":
         raise OSError(f"This function only for Linux!")
     
@@ -160,9 +162,20 @@ def dvc_push(remote: str, bucket_name: str, client_secrets: dict, target_dir: st
     assert osp.isfile(dvc_file) and osp.isfile(gitignore_file),\
         f"dvc and .gitignore file are not exist!!" \
         f"\n files list in {recode_dir} {os.listdir(recode_dir)}"
+        
+        
+        
+def dvc_push(remote: str, bucket_name: str, client_secrets: dict):
+    """
 
-    client_secrets_path = set_gs_credentials(remote, bucket_name, client_secrets)
-    
+    Args:
+        remote (str): name of remote of dvc
+        bucket_name (str): bucket name of google storage
+        client_secrets (dict): credentials info to access google storage
+        
+    """
+    client_secrets_path = set_gs_credentials(remote, bucket_name, client_secrets)        
+        
     # upload dataset to GS by dvc   
     subprocess.call(["dvc push"], shell=True)          
     os.remove(client_secrets_path)

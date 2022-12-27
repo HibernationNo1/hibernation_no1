@@ -140,7 +140,7 @@ class LoggerHook(Hook):
         if 'time' in log_dict.keys():
             self.time_sec_tot += (log_dict['time'] * self.interval)
             time_sec_avg = self.time_sec_tot / (
-                runner.iter - self.start_iter + 1)
+                runner.iter - self.start_iter)
             eta_sec = time_sec_avg * (runner.max_iters - runner.iter - 1)
             eta_str = str(datetime.timedelta(seconds=int(eta_sec)))     
             log_str += f'eta: {eta_str}, '
@@ -241,7 +241,7 @@ class LoggerHook(Hook):
     
     def before_train_iter(self, runner):            
         log_dict_meta = dict(epoch=f'({self.get_epoch(runner)}/{self.max_epochs})',
-                             iter =f'({self.get_iter(runner, inner_iter=True)}/{self.ev_iter})')
+                             iter =f'({runner._inner_iter}/{self.ev_iter})')
         self.write_log('before_iter', [log_dict_meta])
         self.i_t = time.time()      # iter start time 
                 
@@ -265,7 +265,7 @@ class LoggerHook(Hook):
                 runner.log_buffer.clear_output()
         
         
-        current_iter = self.get_iter(runner, inner_iter=True)   
+        current_iter = runner._inner_iter  
         log_dict_meta = OrderedDict(
             mode=log_mode,
             epoch=f'({self.get_epoch(runner)}/{self.max_epochs})',
@@ -287,14 +287,12 @@ class LoggerHook(Hook):
             self.log(runner)
         if self.reset_flag:
             runner.log_buffer.clear_output()
-
- 
         
         time_spent_epoch = time.time() - self.e_t
         log_dict_meta = OrderedDict(
             time_spent_epoch = self.compute_sec_to_h_d(time_spent_epoch),
             end_epoch=self.get_epoch(runner), 
-            **self.compute_remain_time(time_spent_epoch/self.ev_iter))
+            remain_time = self.compute_remain_time(time_spent_epoch/self.ev_iter, runner._max_iters))
         
         self.write_log("after_epoch", [log_dict_meta])
 
@@ -314,11 +312,11 @@ class LoggerHook(Hook):
             # this doesn't modify runner.iter and is regardless of by_epoch
             cur_iter = runner.log_buffer.output.pop('eval_iter_num')
         else:
-            cur_iter = self.get_iter(runner, inner_iter=True)
+            cur_iter = runner._inner_iter
 
         log_dict = OrderedDict(
             mode=self.get_mode(runner),
-            epoch=runner.epoch + 1,  # self.get_epoch(runner),
+            epoch=runner.epoch, 
             iter=cur_iter)
         
         # assign learning rate

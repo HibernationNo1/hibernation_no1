@@ -6,49 +6,22 @@ from hibernation_no1.mmdet.hooks.hook import Hook, HOOK
 class Validation_Hook(Hook):
     # TODO:
     def __init__(self,
-                 show_eta_iter):
+                 interval = ['iter', 50]
+                ):
         self.iter_count = 1
-        self.sum_time_iter = 0
-        self.show_eta_iter = show_eta_iter
+        self.unit, self.val_timing = interval[0], interval[1]
+   
         
-    
-    def before_train_iter(self, runner):          
-        self.i_t = time.time()      # iter start time 
-        
-        
-    def after_train_iter(self, runner) -> None:   
-        self.sum_time_iter +=round(time.time() - self.i_t, 2)
-        self.iter_count+=1
-        
-        if self.every_n_inner_iters(runner, self.val_iter):   # training unit: epoch, iter +1
+    def after_train_iter(self, runner) -> None:           
+        if (self.unit == 'iter' and self.every_n_inner_iters(runner, self.val_timing)) \
+            or (self.unit == 'epoch' and self.every_n_epochs(runner, self.val_timing)):
             runner.mode = 'val'     # change runner mode to val for run validation 
-        if self.every_n_inner_iters(runner, self.show_eta_iter):  
-            remain_time = self.compute_remain_time(self.sum_time_iter/self.iter_count)['remain_time']     
+                
+        
             
-            # estimated time of arrival
-            print(f"eta: [{remain_time}]\
-                    epoch: [{runner.epoch+1}/{self.max_epochs}]\
-                    iter: [{self.get_iter(runner, inner_iter=True)}/{self.ev_iter}]")
-
 
 @HOOK.register_module()
 class Check_Hook(Hook):
-    def __init__(self, 
-                 show_eta_iter, 
-                 val_iter, 
-                 max_epochs,
-                 ev_iter,        # iters_per_epochs          
-                 by_epoch: bool = True):  
-        self.iter_count = 1
-        self.sum_time_iter = 0
-        self.val_iter = val_iter
-        self.max_epochs = max_epochs 
-        self.ev_iter = ev_iter
-        self.by_epoch = by_epoch
-        self.show_eta_iter = show_eta_iter
- 
-            
-    
     def before_val_epoch(self, runner):
         """Check whether the dataset in val epoch is compatible with head.
 

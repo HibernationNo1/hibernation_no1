@@ -72,7 +72,7 @@ def collate(batch, samples_per_gpu=1):
     # 2. cpu_only = False, stack = True,    // key: 'img', 'gt_semantic_seg'
     # 3. cpu_only = False, stack = False,   // key: 'proposals', 'gt_bboxes', 'gt_bboxes_ignore', 'gt_labels'
     """
-   
+    
     if not isinstance(batch, Sequence):
         raise TypeError(f'{batch.dtype} is not supported.')
     if isinstance(batch[0], DataContainer):
@@ -134,7 +134,8 @@ def collate(batch, samples_per_gpu=1):
             for i in range(0, len(batch), samples_per_gpu):
                 stacked.append([sample.data for sample in batch[i:i + samples_per_gpu]])
         return DataContainer(stacked, batch[0].stack, batch[0].padding_value)
-    
+
+        
     elif isinstance(batch[0], Sequence):
         transposed = zip(*batch)
         return [collate(samples, samples_per_gpu) for samples in transposed]

@@ -12,18 +12,15 @@ class MaskRCNN(BaseModule):
                  neck,
                  rpn_head,
                  roi_head=None,
-                 train_cfg=None,
-                 test_cfg=None,
                  init_cfg=None):
         super(MaskRCNN, self).__init__(init_cfg)
 
         self.backbone = build_from_cfg(backbone, BACKBORN)   
         self.neck = build_from_cfg(neck, NECK)   
         self.rpn_head = build_from_cfg(rpn_head, RPN_HEAD)   
-        self.roi_type = build_from_cfg(roi_head, ROI_HEAD)   
+        self.roi_head = build_from_cfg(roi_head, ROI_HEAD)   
           
-        self.train_cfg = train_cfg
-        self.test_cfg = test_cfg
+        self.rpn_proposal_cfg = rpn_head.train_cfg.pop('rpn_proposal')
         
     # @auto_fp16(apply_to=('img', ))
     def forward(self, img, img_metas, return_loss=True, **kwargs):
@@ -132,9 +129,7 @@ class MaskRCNN(BaseModule):
         # [2, 256, 12, 21]      # max_pool2d
         
         losses = dict()
-        # RPN forward and loss
-        proposal_cfg = self.train_cfg.get('rpn_proposal', self.test_cfg.rpn)
-        
+        ### RPN forward and loss        
         ## compute rpn loss and get proposal boxes
         # type:dict, keys = ['loss_cls', 'loss_bbox'],      each len = num_levels, value: tensor(float)
         # len(proposal_list) = batch_size
@@ -146,7 +141,7 @@ class MaskRCNN(BaseModule):
                                                                 gt_bboxes,
                                                                 gt_labels=None,
                                                                 gt_bboxes_ignore=None,
-                                                                proposal_cfg=proposal_cfg,
+                                                                proposal_cfg=self.rpn_proposal_cfg,
                                                                 **kwargs)
         
         losses.update(rpn_losses)

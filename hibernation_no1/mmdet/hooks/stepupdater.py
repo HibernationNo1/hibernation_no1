@@ -1,6 +1,5 @@
 from typing import List, Optional, Union
-
-from hibernation_no1.mmdet.modules.base.runner import BaseRunner    
+ 
 from hibernation_no1.mmdet.hooks.hook import Hook, HOOK
 
 @HOOK.register_module()
@@ -54,7 +53,7 @@ class StepLrUpdaterHook(Hook):
         self.regular_lr: list = []  # expected lr if no warming up is performed
         
 
-    def get_lr(self, runner: 'BaseRunner', base_lr: float):
+    def get_lr(self, runner , base_lr: float):
         progress = runner.epoch
         
         # calculate exponential term
@@ -74,7 +73,7 @@ class StepLrUpdaterHook(Hook):
         return lr
     
     
-    def get_regular_lr(self, runner: 'BaseRunner'):
+    def get_regular_lr(self, runner):
         return [self.get_lr(runner, _base_lr) for _base_lr in self.base_lr]
         
         
@@ -90,7 +89,7 @@ class StepLrUpdaterHook(Hook):
     
     
 
-    def before_run(self, runner: 'BaseRunner'):
+    def before_run(self, runner):
         # NOTE: when resuming from a checkpoint, if 'initial_lr' is not saved,
         # it will be set according to the optimizer params
 
@@ -100,7 +99,7 @@ class StepLrUpdaterHook(Hook):
         self.base_lr = [group['initial_lr'] for group in runner.optimizer.param_groups]
         
     
-    def before_train_epoch(self, runner: 'BaseRunner'):
+    def before_train_epoch(self, runner):
         if self.warmup_iters is None:
             epoch_len = len(runner.train_dataloader)  # type: ignore
             self.warmup_iters = self.warmup_epochs * epoch_len  # type: ignore
@@ -109,7 +108,7 @@ class StepLrUpdaterHook(Hook):
         self._set_lr(runner, self.regular_lr)           # apply learning rete to each parameter group
     
     
-    def before_train_iter(self, runner: 'BaseRunner'):
+    def before_train_iter(self, runner):
         cur_iter = runner.iter
 
         if self.warmup is None or cur_iter > self.warmup_iters:

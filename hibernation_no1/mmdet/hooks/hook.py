@@ -71,22 +71,22 @@ class Hook:
         self.after_iter(runner)
 
     def every_n_epochs(self, runner, n):
-        return (runner.epoch + 1) % n == 0 if n > 0 else False
+        return (runner.epoch) % n == 0 if n > 0 else False
 
     def every_n_inner_iters(self, runner, n):
-        return (runner.inner_iter + 1) % n == 0 if n > 0 else False
+        return (runner.inner_iter) % n == 0 if n > 0 else False
 
     def every_n_iters(self, runner, n):
-        return (runner.iter + 1) % n == 0 if n > 0 else False
+        return (runner.iter) % n == 0 if n > 0 else False
 
     def end_of_epoch(self, runner):
-        return runner.inner_iter + 1 == len(runner.train_dataloader)
+        return runner.inner_iter == len(runner.train_dataloader)
 
     def is_last_epoch(self, runner):
-        return runner.epoch + 1 == runner._max_epochs
+        return runner.epoch == runner._max_epochs
 
     def is_last_iter(self, runner):
-        return runner.iter + 1 == runner._max_iters
+        return runner.iter == runner._max_iters
 
     def get_triggered_stages(self):
         """
@@ -125,25 +125,14 @@ class Hook:
         return [stage for stage in Hook.stages if stage in trigger_stages]
     
     
-    def compute_remain_time(self, time_spent):
-        time_dict = dict()
+    def compute_remain_time(self, taken_time, max_iters):
+        remain_iter = max_iters - self.iter_count
+        return self.compute_sec_to_h_d(taken_time * remain_iter)           
         
-        max_iter = self.max_epochs*self.ev_iter      # total iters for training 
-        remain_iter = max_iter - self.iter_count
-        time_dict['remain_time'] = self.compute_sec_to_h_d(time_spent * remain_iter)           
-        
-        return time_dict   
-    
-    def get_iter(self, runner, inner_iter: bool = False):
-        """Get the current training iteration step."""
-        current_iter = runner.inner_iter + 1
-
-        return current_iter
-    
     
     def get_epoch(self, runner):
         if runner.mode == 'train':
-            epoch = runner.epoch + 1
+            epoch = runner.epoch
         elif runner.mode == 'val':
             # normal val mode
             # runner.epoch += 1 has been done before val workflow

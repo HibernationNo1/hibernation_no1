@@ -10,6 +10,7 @@ from .transforms.compose import Compose
 from .transforms.defaultformatbundle import DefaultFormatBundle
 from .transforms.loadannotations import LoadAnnotations
 from .transforms.loadimagefronfile import LoadImageFromFile
+from .transforms.multiscaleflipaug import MultiScaleFlipAug
 from .transforms.normalize import Normalize
 from .transforms.pad import Pad
 from .transforms.randomflip import RandomFlip
@@ -19,7 +20,7 @@ from .transforms.utils import imrescale, rescale_size, imresize, imflip
 __all__ = [
     "COCO",
     
-    "Collect", 'Compose', "DefaultFormatBundle", "LoadAnnotations", "LoadImageFromFile", "Normalize", "Pad", "RandomFlip", "Resize",
+    "Collect", 'Compose', "DefaultFormatBundle", "LoadAnnotations", "LoadImageFromFile", "MultiScaleFlipAug", "Normalize", "Pad", "RandomFlip", "Resize",
     "imrescale", "rescale_size", "imresize", "imflip",
     
     'DataContainer', "build_dataset", "CustomDataset", "GroupSampler", "build_dataloader"

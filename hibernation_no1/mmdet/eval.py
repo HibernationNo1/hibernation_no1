@@ -108,10 +108,10 @@ def get_box_from_pol(polygon):
 
 class Evaluate():
     def __init__(self, model, cfg, dataloader, mask_to_polygon):
-        self.mask_to_polygon = mask_to_polygon
         self.model = model
         self.cfg = cfg
         self.dataloader = dataloader
+        self.mask_to_polygon = mask_to_polygon
         self.classes = self.model.CLASSES
         self.confusion_matrix = dict()
         self.set_treshold()
@@ -121,9 +121,9 @@ class Evaluate():
    
     
     def set_treshold(self):
-        num_thrshd_divi = self.cfg.num_thrshd_divi
-        thrshd_value = (self.cfg.iou_threshold[-1] - self.cfg.iou_threshold[0]) / num_thrshd_divi
-        self.iou_threshold = [round(self.cfg.iou_threshold[0] + (thrshd_value*i), 2) for i in range(num_thrshd_divi+1)]
+        num_thrshd_divi = self.cfg.num_thrs_divi
+        thrshd_value = (self.cfg.iou_thrs[-1] - self.cfg.iou_thrs[0]) / num_thrshd_divi
+        self.iou_threshold = [round(self.cfg.iou_thrs[0] + (thrshd_value*i), 2) for i in range(num_thrshd_divi+1)]
     
     def compute_F1_score(self):
         F1_score_dict = dict()
@@ -251,7 +251,7 @@ class Evaluate():
             batch_images_path = []    
             for img_meta in img_metas:
                 batch_images_path.append(img_meta['filename'])
-            batch_results = inference_detector(self.model, batch_images_path, self.cfg.data.val.batch_size)
+            batch_results = inference_detector(self.model, batch_images_path, self.cfg.batch_size)
                         
             assert (len(batch_gt_bboxes) == 
                         len(batch_gt_labels) ==
@@ -325,7 +325,7 @@ class Evaluate():
                     iou = compute_iou(i_bboxes, gt_bboxes)
                     
                     if (iou > threshold and          
-                        infer_dict['score'][i] > self.cfg.confidence_threshold):
+                        infer_dict['score'][i] > self.cfg.confidence_thrs):
                         if pred_class_name == gt_class_name:  
                             self.confusion_matrix[pred_class_name][idx]['num_iou'] +=1
                         

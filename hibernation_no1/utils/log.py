@@ -49,13 +49,15 @@ def get_logger(name, log_file=None, log_level=logging.INFO, file_mode='w'):
     stream_handler = logging.StreamHandler()
     handlers = [stream_handler]
 
+    assert osp.isdir(os.pardir), f"Path: {os.pardir} must have exist!"
+    
     if log_file is not None:
         # Here, the default behaviour of the official logger is 'a'. Thus, we
         # provide an interface to change the file mode to the default
         # behaviour.
         file_handler = logging.FileHandler(log_file, file_mode)
         handlers.append(file_handler)
-        
+    
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     
     for handler in handlers:
