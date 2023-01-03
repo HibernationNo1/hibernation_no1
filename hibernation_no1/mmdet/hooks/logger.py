@@ -189,7 +189,7 @@ class LoggerHook(Hook):
             if i == num_bar//2:
                 text_log += f'< {status} >'
             text_log += '-'
-            
+        
         for log_dict in log_dict_list:
             text_log = text_log + "\n" + dict_to_pretty(log_dict) + "\n"
             

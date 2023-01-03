@@ -67,7 +67,7 @@ def get_dvc_config(default_remote: str):
     return dvc_cfg
 
 
-def check_gs_credentials(remote):
+def check_gs_credentials_dvc(remote):
     """_summary_
 
     Args:
@@ -81,7 +81,7 @@ def check_gs_credentials(remote):
     
 
 
-def set_gs_credentials(remote: str, bucket_name: str, client_secrets: dict):    
+def set_gs_credentials_dvc(remote: str, bucket_name: str, client_secrets: dict):    
     """ access google cloud with credentials
 
     Args:
@@ -103,7 +103,7 @@ def set_gs_credentials(remote: str, bucket_name: str, client_secrets: dict):
     print(f"$ {credentials_command}")
     subprocess.call([credentials_command], shell=True)
     
-    check_gs_credentials(remote)
+    check_gs_credentials_dvc(remote)
     
     return client_secrets_path
 
@@ -127,7 +127,7 @@ def dvc_pull(remote: str, bucket_name: str, client_secrets: dict, data_root: str
     dvc_path = osp.join(os.getcwd(), f'{data_root}.dvc')          
     assert osp.isfile(dvc_path), f"Path: {dvc_path} is not exist!" 
 
-    client_secrets_path = set_gs_credentials(remote, bucket_name, client_secrets)
+    client_secrets_path = set_gs_credentials_dvc(remote, bucket_name, client_secrets)
     
     # download dataset from GS by dvc 
     dvp_pull_srt = f"dvc pull {data_root}.dvc"
@@ -174,7 +174,7 @@ def dvc_push(remote: str, bucket_name: str, client_secrets: dict):
         client_secrets (dict): credentials info to access google storage
         
     """
-    client_secrets_path = set_gs_credentials(remote, bucket_name, client_secrets)        
+    client_secrets_path = set_gs_credentials_dvc(remote, bucket_name, client_secrets)        
         
     # upload dataset to GS by dvc   
     subprocess.call(["dvc push"], shell=True)          
