@@ -2,10 +2,97 @@ import numpy as np
 import torch
 import itertools
 
-from hibernation_no1.mmdet.data.transforms.utils import replace_ImageToTensor
-from hibernation_no1.mmdet.data.transforms.compose import Compose
-from hibernation_no1.mmdet.data.dataloader import collate
-from hibernation_no1.mmdet.scatter import parallel_scatter
+from docker.hibernation_no1.mmdet.data.transforms.utils import replace_ImageToTensor
+from docker.hibernation_no1.mmdet.data.transforms.compose import Compose
+from docker.hibernation_no1.mmdet.data.dataloader import collate
+from docker.hibernation_no1.mmdet.scatter import parallel_scatter
+from docker.hibernation_no1.mmdet.checkpoint import load_checkpoint     
+
+def build_detector(cfg, model_path, device='cuda:0', logger = None):
+    checkpoint = load_checkpoint(model_path, logger = logger)
+    state_dict = checkpoint['state_dict']
+    
+    state_dict = checkpoint['state_dict']
+    metadata = getattr(state_dict, '_metadata', dict())
+    meta = checkpoint['meta']
+    optimizer = checkpoint['optimizer']
+    
+    if meta.get("model_cfg", None) is not None:
+        model_cfg = meta['model_cfg']
+    elif cfg.get('model', None) is not None:
+        model_cfg = cfg.model
+    else: 
+        raise TypeError(f"There is no config for build model.")
+
+    # TODO : build with registry
+    if model_cfg.type == 'MaskRCNN':
+        model_cfg.pop("type")
+        from docker.hibernation_no1.mmdet.modules.detector.maskrcnn import MaskRCNN
+        model = MaskRCNN(**model_cfg)        
+        
+    if 'CLASSES' in checkpoint.get('meta', {}):
+        model.CLASSES = checkpoint['meta']['CLASSES']
+        
+    # load state_dict
+    return load_state_dict(model, state_dict, device = device, logger = logger)
+    
+
+def load_state_dict(model: torch.nn.Module, state_dict, device = 'cuda:0',  logger = None):
+    """
+    Copies parameters and buffers from state_dict into module
+    """
+    unexpected_keys = []
+    all_missing_keys = []
+    err_msg = []
+    metadata = getattr(state_dict, '_metadata', None)
+    
+    # sub function
+    # assign weight to model 
+    def load(module, prefix=''):
+        local_metadata = {} if metadata is None else metadata.get(prefix[:-1], {})
+        
+        # method of nn.Module
+        module._load_from_state_dict(state_dict, prefix, local_metadata, True,
+                                     all_missing_keys, unexpected_keys,
+                                     err_msg)
+        for name, child in module._modules.items():
+            if child is not None:
+                load(child, prefix + name + '.')
+                
+
+    state_dict = state_dict.copy()
+    if metadata is not None:
+        state_dict._metadata = metadata  # type: ignore
+        
+    load(model)
+    # break load->load reference cycle
+    load = None  # type: ignore
+    
+    # ignore "num_batches_tracked" of BN layers
+    missing_keys = [
+        key for key in all_missing_keys if 'num_batches_tracked' not in key
+    ]
+    
+    if unexpected_keys:
+        err_msg.append('unexpected key in source '
+                       f'state_dict: {", ".join(unexpected_keys)}\n')
+    if missing_keys:
+        err_msg.append(
+            f'missing keys in source state_dict: {", ".join(missing_keys)}\n')
+
+    if len(err_msg) > 0 :
+        err_msg.insert(
+            0, 'The model and loaded state dict do not match exactly\n')
+        err_msg = '\n'.join(err_msg)  # type: ignore
+        if logger is not None:
+            logger.warning(err_msg)
+        else:
+            print(err_msg)
+    
+    model.to(device)
+    model.eval()
+    return model
+    
 
 
 def inference_detector(model, imgs_path, batch_size):
@@ -32,6 +119,8 @@ def inference_detector(model, imgs_path, batch_size):
 
     if  cfg.get("test_pipeline", None) is not None: 
         pipeline_cfg = cfg.test_pipeline
+    elif cfg.get("val_pipeline", None) is not None:
+        pipeline_cfg = cfg.val_pipeline
     else: raise ValueError("val or test config must be specific, but both got None")
 
     re_pipeline_cfg  = replace_ImageToTensor(pipeline_cfg)

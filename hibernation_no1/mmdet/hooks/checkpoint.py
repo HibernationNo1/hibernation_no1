@@ -1,7 +1,7 @@
 
 import os, os.path as osp
 
-from hibernation_no1.mmdet.hooks.hook import Hook, HOOK
+from docker.hibernation_no1.mmdet.hooks.hook import Hook, HOOK
 
 @HOOK.register_module()
 class CheckpointHook(Hook):
@@ -64,9 +64,9 @@ class CheckpointHook(Hook):
 
         self.filename_tmpl = filename_tmpl
         self.set_filename_tmpl()
-        
         self.model_cfg = kwargs.get("model_cfg", None)
         self.meta = kwargs.get("meta", None)
+       
                     
                 
         
@@ -102,26 +102,25 @@ class CheckpointHook(Hook):
         if self.unit == "epoch" and self.every_n_epochs(runner, self.interval) or \
             self.save_last and self.is_last_epoch(runner):
             runner.logger.info(f'Saving checkpoint at {runner.epoch} epochs')
-            self._save_checkpoint(runner)
+            self.save_checkpoint_hook(runner)
         elif self.unit == "iter" and self.every_n_inner_iters(runner, self.interval):
             # TODO: check 
             runner.logger.info(f'Saving checkpoint at {runner.iter} iters')
-            self._save_checkpoint(runner)
+            self.save_checkpoint_hook(runner)
         
         if self.save_last and self.is_last_epoch(runner):
-            self._save_checkpoint(runner)
+            self.save_checkpoint_hook(runner)
        
   
             
-    def _save_checkpoint(self, runner):
+    def save_checkpoint_hook(self, runner):
         """Save the current checkpoint and delete unwanted checkpoint."""
         # save meta, parameters of model, optimazers 
         checkpoint_cfg = dict(out_dir = self.out_dir,
                               filename_tmpl = self.filename_tmpl,
                               save_optimizer = self.save_optimizer,
                               model_cfg = self.model_cfg,
-                              meta = self.meta)       
-      
+                              meta = self.meta) 
         runner.save_checkpoint(**checkpoint_cfg)
         
         if runner.meta is not None:
@@ -166,4 +165,4 @@ class CheckpointHook(Hook):
                                            and self.is_last_iter(runner)):
             runner.logger.info(f'Saving checkpoint at {runner.iter} iterations')
         
-            self._save_checkpoint(runner)
+            self.save_checkpoint_hook(runner)

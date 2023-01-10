@@ -1,7 +1,7 @@
 import logging
 from torch.nn.utils import clip_grad
 
-from hibernation_no1.mmdet.hooks.hook import Hook, HOOK
+from docker.hibernation_no1.mmdet.hooks.hook import Hook, HOOK
 
 @HOOK.register_module()
 class OptimizerHook(Hook):
@@ -52,7 +52,6 @@ class OptimizerHook(Hook):
                 runner.log_buffer.update({'grad_norm': float(grad_norm)},
                                          runner.outputs['num_samples'])
                 
-
         # optimize (back propagation)
         runner.optimizer.step()    
         

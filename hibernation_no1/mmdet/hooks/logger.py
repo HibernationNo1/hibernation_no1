@@ -1,10 +1,11 @@
 import torch
 import os, os.path as osp
+import json
 import time
 from collections import OrderedDict
 
-from hibernation_no1.utils.utils import is_list_of, is_tuple_of, dict_to_pretty
-from hibernation_no1.mmdet.hooks.hook import Hook, HOOK
+from docker.hibernation_no1.utils.utils import is_list_of, is_tuple_of, dict_to_pretty
+from docker.hibernation_no1.mmdet.hooks.hook import Hook, HOOK
 from typing import Optional, Dict
 
 @HOOK.register_module()
@@ -42,8 +43,6 @@ class LoggerHook(Hook):
     """
 
     def __init__(self,
-                 max_epochs,
-                 ev_iter,
                  interval: int = 10,
                  ignore_last: bool = True,
                  reset_flag: bool = False,
@@ -52,10 +51,7 @@ class LoggerHook(Hook):
                  out_suffix: str = '.log',
                  log_file_name: str = 'RUN_log',
                  keep_local: bool = True):
-        self.iter_count = 1
-        self.max_epochs = max_epochs 
-        self.ev_iter = ev_iter
-        
+        self.iter_count = 1     # for compute remain time at self.compute_remain_time
         self.interval = interval
         self.ignore_last = ignore_last
         self.reset_flag = reset_flag
@@ -81,21 +77,6 @@ class LoggerHook(Hook):
             return round(items, 5)
         else:
             return items
-    
-    def get_mode(self, runner) -> str:
-        if runner.mode == 'train':
-            if 'time' in runner.log_buffer.output:
-                mode = 'train'
-            else:
-                mode = 'val'
-        elif runner.mode == 'val':
-            mode = 'val'
-        else:
-            raise ValueError(f"runner mode should be 'train' or 'val', "
-                             f'but got {runner.mode}')
-        return mode
-    
-    
     
     
     def _get_max_memory(self, runner) :
@@ -168,37 +149,69 @@ class LoggerHook(Hook):
         
         log_str += ', '.join(log_items)
         
+        
         runner.logger.info(log_str)
 
         
         
-    def write_log(self, status, log_dict_list: list):    
+    def write_log(self, status, log_):    
         # dump log in .log format
 
-        if not is_list_of(log_dict_list, dict): raise TypeError(f"element of list must be dict, but was not.")
+        if self.out_suffix=='.json' :       # can write max 21889 lines
+            if not isinstance(log_, dict): raise TypeError(f"if out_suffix is '.json', input log type must be dict! ")
+            if not osp.isfile(self.log_file_path):
+                text_log = dict()
+                
+            else:
+                with open(self.log_file_path, "r", encoding='utf-8') as f:
+                    text_log = json.load(f)
         
-        text_log = '\n'
-        if status in ['before_run', 'after_run']:
-            num_bar = 60
-        elif status in ['before_epoch', 'after_epoch']:
-            num_bar = 45
-        elif status in ['before_iter', 'after_iter']:
-            num_bar = 30
-        
-        for i in range(num_bar):
-            if i == num_bar//2:
-                text_log += f'< {status} >'
-            text_log += '-'
-        
-        for log_dict in log_dict_list:
-            text_log = text_log + "\n" + dict_to_pretty(log_dict) + "\n"
+            if status == 'before_run':
+                text_log[status] = log_
+            elif status == 'before_epoch': 
+                dict_map = dict(before_epoch= None,
+                                EPOCH = list(),
+                                after_epoch = None)  
+                if text_log.get('RUN', None) is None:
+                    text_log['RUN'] = [dict_map] 
+                else: 
+                    text_log['RUN'].append(dict_map)
+                text_log['RUN'][-1]['before_epoch'] = log_
+            elif status =="after_iter":
+                text_log['RUN'][-1]['EPOCH'].append(log_)
+            elif status == 'after_epoch':
+                text_log['RUN'][-1]['after_epoch'] = log_
+            elif status == 'after_run':
+                text_log[status] = log_
             
-        if osp.isfile(self.log_file_path):
-            with open(self.log_file_path, 'a+') as f:
-                f.write(f"{text_log}")
-        else:
-            with open(self.log_file_path, 'w') as f:        
-                f.write(f"{text_log}")
+            json.dump(text_log, open(self.log_file_path, "w"), indent = 4)
+                
+        elif self.out_suffix=='.log':
+            if not isinstance(log_, list): raise TypeError(f"if out_suffix is '.log', input log type must be list! ")
+            if not is_list_of(log_, dict): raise TypeError(f"Element of list must be dict, but was not.")
+            
+            text_log = '\n'
+            if status in ['before_run', 'after_run']:
+                num_bar = 60
+            elif status in ['before_epoch', 'after_epoch']:
+                num_bar = 45
+            elif status in ['before_iter', 'after_iter']:
+                num_bar = 30
+            
+            for i in range(num_bar):
+                if i == num_bar//2:
+                    text_log += f'< {status} >'
+                text_log += '-'
+            
+            for log_dict in log_:
+                text_log = text_log + "\n" + dict_to_pretty(log_dict) + "\n"
+                
+            if osp.isfile(self.log_file_path):
+                with open(self.log_file_path, 'a+') as f:
+                    f.write(f"{text_log}")
+            else:
+                with open(self.log_file_path, 'w') as f:        
+                    f.write(f"{text_log}")
     
         
                 
@@ -216,41 +229,34 @@ class LoggerHook(Hook):
             self.log_file_path = osp.join(runner.work_dir, self.log_file_name)
               
         self.start_iter = runner.iter
-        log_dict_list = []
-        log_dict_list.append(dict(
-            bach_size = runner.get('batch_size') ,
-            max_iteration = runner.get('_max_iters'),
-            max_epoche = runner.get('_max_epochs')
-        ))
-        
-        if len(log_dict_list) != 0:
-            self.write_log('before_run', log_dict_list)  
+
+        log_dict = dict(bach_size = runner.get('batch_size') ,
+                        max_iteration = runner.get('_max_iters'),
+                        max_epoche = runner.get('_max_epochs'))
+
+        if self.out_suffix=='.log':
+            log_dict = [log_dict]
+        self.write_log('before_run', log_dict)  
         
         self.r_t = time.time()  
             
         
         
     def before_train_epoch(self, runner):
-        log_dict = dict(
-            start_epoch = f'({self.get_epoch(runner)}/{self.max_epochs})',
-            iterd_per_epochs = self.ev_iter
-            )
-        self.write_log('before_epoch', [log_dict])
+        log_dict = dict(epoch = f'[{runner.epoch}/{runner._max_epochs}]',
+                        iterd_per_epochs = runner._iterd_per_epochs)
+        
+        if self.out_suffix=='.log':
+            log_dict = [log_dict]
+            
+        self.write_log('before_epoch', log_dict)
         runner.log_buffer.clear()  # clear logs of last epoch
         self.e_t = time.time()      # epoch start time 
     
-    def before_train_iter(self, runner):            
-        log_dict_meta = dict(epoch=f'({self.get_epoch(runner)}/{self.max_epochs})',
-                             iter =f'({runner._inner_iter}/{self.ev_iter})')
-        self.write_log('before_iter', [log_dict_meta])
-        self.i_t = time.time()      # iter start time 
                 
         
-    def after_train_iter(self, runner) -> None:   
-        self.iter_count += 1
-        log_mode = 'train'
-        
- 
+    def after_train_iter(self, runner) -> None:    
+        self.iter_count +=1
         if self.every_n_inner_iters(runner, self.interval):   # training unit: epoch, iter +1
             runner.log_buffer.average(self.interval)   
         # elif not self.by_epoch and self.every_n_iters(runner, self.interval):   # training unit: iter, iter +1
@@ -259,24 +265,31 @@ class LoggerHook(Hook):
             # not precise but more stable
             runner.log_buffer.average(self.interval)
 
+        
         if runner.log_buffer.ready:
             self.log(runner)
+            
             if self.reset_flag:
                 runner.log_buffer.clear_output()
         
         
         current_iter = runner._inner_iter  
-        log_dict_meta = OrderedDict(
-            mode=log_mode,
-            epoch=f'({self.get_epoch(runner)}/{self.max_epochs})',
-            iter=f'({current_iter}/{self.ev_iter})')
+        log_dict = dict(epoch=f'[{runner.epoch}/{runner._max_epochs}]',
+                        iter=f'[{current_iter}/{runner._iterd_per_epochs}]')
         
+        log_dict_loss = dict(**runner.log_buffer.get_last())        
+        if log_dict_loss.get("data_time", None) is not None: del log_dict_loss['data_time']
+        if log_dict_loss.get("time", None) is not None: del log_dict_loss['time']
+
+        for key, item in log_dict_loss.items():
+            log_dict[key] = item
+
+        if self.out_suffix=='.log':
+            log_dict = [log_dict]
+
+        self.write_log("after_iter", log_dict)
         
         runner.log_buffer.log(self.interval)
-
-        log_dict_loss = dict(**runner.log_buffer.log_output) 
-        del log_dict_loss['data_time'], log_dict_loss['time']
-        self.write_log("after_iter", [log_dict_meta, log_dict_loss])
         runner.log_buffer.clear_log()
         
      
@@ -288,22 +301,31 @@ class LoggerHook(Hook):
         if self.reset_flag:
             runner.log_buffer.clear_output()
         
-        time_spent_epoch = time.time() - self.e_t
-        log_dict_meta = OrderedDict(
-            time_spent_epoch = self.compute_sec_to_h_d(time_spent_epoch),
-            end_epoch=self.get_epoch(runner), 
-            remain_time = self.compute_remain_time(time_spent_epoch/self.ev_iter, runner._max_iters))
+        taken_time_epoch = time.time() - self.e_t
+        log_dict_meta = dict(
+            taken_time_epoch = self.compute_sec_to_h_d(taken_time_epoch),
+            remain_time = self.compute_remain_time(taken_time_epoch/runner._iterd_per_epochs, runner._max_iters))
         
-        self.write_log("after_epoch", [log_dict_meta])
+        if self.out_suffix=='.log':
+            log_dict_meta = [log_dict_meta]
+        self.write_log("after_epoch", log_dict_meta)
 
    
     def after_run(self, runner):
-        log_dict_meta = OrderedDict(
-            training_time = self.compute_sec_to_h_d(time.time() - self.r_t)
-            )
+        log_dict = dict(taken_time_training = self.compute_sec_to_h_d(time.time() - self.r_t))
+
+        log_dict_loss = dict(**runner.log_buffer.get_last()) 
+        if log_dict_loss.get("data_time", None) is not None: del log_dict_loss['data_time']
+        if log_dict_loss.get("time", None) is not None: del log_dict_loss['time']
+
+        for key, item in log_dict_loss.items():
+            log_dict[key] = item
+            
+        if self.out_suffix=='.log':
+            log_dict = [log_dict]
+ 
         
-        log_dict_loss = dict(**runner.log_buffer.log_output) 
-        self.write_log("after_run", [log_dict_meta, log_dict_loss])
+        self.write_log("after_run", log_dict)
         runner.log_buffer.clear_log()
          
     
@@ -314,10 +336,8 @@ class LoggerHook(Hook):
         else:
             cur_iter = runner._inner_iter
 
-        log_dict = OrderedDict(
-            mode=self.get_mode(runner),
-            epoch=runner.epoch, 
-            iter=cur_iter)
+        log_dict = OrderedDict(epoch=runner.epoch, 
+                               iter=cur_iter)
         
         # assign learning rate
         cur_lr = runner.current_lr()

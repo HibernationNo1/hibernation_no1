@@ -1,9 +1,10 @@
 
 import os, os.path as osp
-from pathlib import Path
-from .config import ConfigDict, Config
 import json
 import numpy as np
+from pathlib import Path
+
+from .config import ConfigDict, Config
 
 
 class NpEncoder(json.JSONEncoder):

@@ -1,4 +1,4 @@
-from hibernation_no1.mmdet.registry import Registry
+from docker.hibernation_no1.mmdet.registry import Registry
 
 
 

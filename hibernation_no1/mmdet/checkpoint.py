@@ -33,15 +33,13 @@ def save_checkpoint(model: torch.nn.Module,
     elif not isinstance(meta, dict):
         raise TypeError(f'meta must be a dict or None, but got {type(meta)}')
     
-
     model = model.module
-        
+    
     if hasattr(model, 'CLASSES') and model.CLASSES is not None:
         # save class name to the meta
         meta.update(CLASSES=model.CLASSES)
-    
+        
     # create dict that with parameters of model
-    
     checkpoint = {
         'meta': meta,
         'state_dict': weights_to_cpu(get_state_dict(model))

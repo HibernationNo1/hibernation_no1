@@ -7,12 +7,12 @@ import torch
 from torch.optim import Optimizer
 
 
-from hibernation_no1.mmdet.utils import get_host_info, compute_sec_to_h_d
-from hibernation_no1.mmdet.eval import Evaluate
+from docker.hibernation_no1.mmdet.utils import get_host_info, compute_sec_to_h_d
+from docker.hibernation_no1.mmdet.eval import Evaluate
 
-from hibernation_no1.mmdet.registry import build_from_cfg
-from hibernation_no1.mmdet.hooks.hook import Hook, HOOK
-from hibernation_no1.mmdet.checkpoint import save_checkpoint as sc_save_checkpoint 
+from docker.hibernation_no1.mmdet.registry import build_from_cfg
+from docker.hibernation_no1.mmdet.hooks.hook import Hook, HOOK
+from docker.hibernation_no1.mmdet.checkpoint import save_checkpoint as sc_save_checkpoint 
 
 priority_dict = {'HIGHEST' : 0,
                  'VERY_HIGH' : 10,
@@ -94,6 +94,7 @@ class Runner:
         self.batch_size = kwargs.get('batch_size', None)
          
         self.model = model
+    
         self.optimizer = optimizer
         self.logger = logger
         self.meta = meta
@@ -109,7 +110,7 @@ class Runner:
         
         self._rank, self._world_size = 0, 1
         self.timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
-        self.mode = None
+        self.val_result = []    # will be appended when run Validation_Hook
         self._hooks = []    
         self._epoch = 1         # current epoch during training
         self._iter = 1          # current iter during training
@@ -119,7 +120,7 @@ class Runner:
         if max_epochs is not None and max_iters is not None:
             raise ValueError(
                 'Only one of `max_epochs` or `max_iters` can be set.')
-        self._max_epochs = max_epochs
+        self._max_epochs = max_epochs 
         self._max_iters = max_iters
         
         if self._max_epochs is not None:     
@@ -139,8 +140,6 @@ class Runner:
         
     def run(self, 
             train_dataloader, 
-            val_dataloader = None,
-            val_cfg = None,
             **kwargs):
         """Start running.
 
@@ -153,54 +152,45 @@ class Runner:
                 iteratively.
         """
         if self._by_epoch: self.logger.info(f'Training in epoch units.   max epochs: {self._max_epochs}')
-        else: self.logger.info(f'Training in iteration units.   max iters: {self._max_iters}')
-            
-  
-        self.val_cfg = val_cfg
-        self.mask_to_polygon = self.val_cfg.mask2polygon
-        self.katib_logger = kwargs.get("katib", None)       # for run with katib
-        
+        else: self.logger.info(f'Training in iteration units.   max iters: {self._max_iters}')       
         self.logger.info(f'Start running, host: {get_host_info()}, work_dir: {self.work_dir}')
         self.logger.info(f'Hooks will be executed in the following order:\n{self.get_hook_info()}')
         
-          
-
         
         self.call_hook('before_run')
         self.start_time = time.time()
         if self._by_epoch:        
-            while self._epoch < self._max_epochs:        # Training in epochs unit
-                self.train(train_dataloader, val_dataloader, **kwargs)
+            while self._epoch < self._max_epochs + 1:        # Training in epochs unit
+                self.train(train_dataloader, **kwargs)
         else:   
-            while self._iter < self._max_iters:
-                # self.train(train_dataloader, val_dataloader, **kwargs)
+            while self._iter < self._max_iters + 1:
+                # self.train(train_dataloader, **kwargs)
                 
                 pass
         time.sleep(1)  # wait for some hooks like loggers to finish
         self.call_hook('after_run')
         
         
-    def run_iter(self, data_batch, train_mode):
-        if train_mode:
-            # MMDataParallel.train_step
-            # outputs: 
-            # loss:total loss, log_vars: log_vars, num_samples: batch_size
-            outputs = self.model.train_step(data_batch, self.optimizer)
-        else:   # TODO
-            outputs = self.model.val_step(data_batch, self.optimizer)
+    def run_iter(self, data_batch):
+
+        # MMDataParallel.train_step
+        # outputs: 
+        # loss:total loss, log_vars: log_vars, num_samples: batch_size
+        outputs = self.model.train_step(data_batch, self.optimizer)
+      
             
         if not isinstance(outputs, dict):
             raise TypeError('"batch_processor()" or "model.train_step()"'
-                            'and "model.val_step()" must return a dict')
+                            'and "model.val_step()" must return a dict')        # delete val_step
         if 'log_vars' in outputs:
             self.log_buffer.update(outputs['log_vars'], outputs['num_samples'])
+        
         self.outputs = outputs
             
         
                 
-    def train(self, train_dataloader, val_dataloader, **kwargs):
+    def train(self, train_dataloader, **kwargs):
         self.model.train()
-        self.mode = 'train'
         self.train_dataloader = train_dataloader
         self.call_hook('before_train_epoch')
         time.sleep(2)  # Prevent possible deadlock during epoch transition
@@ -213,39 +203,14 @@ class Runner:
             self.call_hook('before_train_iter')
             # self.outputs: 
             # loss:total loss, log_vars: log_vars, num_samples: batch_size
-            self.run_iter(data_batch, train_mode=True)
+            self.run_iter(data_batch)
             self.call_hook('after_train_iter')
-            
-            if self.mode=="val" and self.val_cfg is not None:
-                self.val(val_dataloader, **kwargs)
-                
+
             del self.data_batch
             self._iter += 1
         self.call_hook('after_train_epoch')
         self._epoch += 1
-        
-        
-    def val(self, val_dataloader, **kwargs):     
-        self.model.eval()
-        eval_cfg = dict(model= self.model.eval(), 
-                        cfg= self.val_cfg,
-                        dataloader= val_dataloader,
-                        mask_to_polygon= self.mask_to_polygon)
-        eval = Evaluate(**eval_cfg)   
-        mAP = eval.compute_mAP()
-        datatime = compute_sec_to_h_d(time.time() - self.start_time)
-        log_str = f"epoch: [{self._epoch}|{self._max_epochs}],    iter: [{self._inner_iter}|{self._iterd_per_epochs}]     "
-        log_str +=f"mAP={mAP}       datatime={datatime}\n"
-        
-        katib_logger = kwargs.get("katib_logger", None)
-        if katib_logger is not None:
-            katib_logger.logger.info(log_str)
-        else:
-            print(log_str)
-        
-        self.mode = "train"
-        self.model.train()
-        
+            
     
     def call_hook(self, fn_name):
         """Call all hooks.
@@ -300,21 +265,15 @@ class Runner:
                 break
         if not inserted:
             self._hooks.insert(0, hook)
-        
+         
     
-    def register_training_hooks(self,
-                                hook_cfg_list,
-                                ev_iter):       # len(train_dataloader)
-
+    def register_training_hooks(self, hook_cfg_list):
         for hook_cfg in hook_cfg_list:            
             if hook_cfg.get("priority", None) is None: priority = "VERY_LOW"
             else: priority = hook_cfg.pop("priority")
             
-            if hook_cfg.type == 'LoggerHook': hook_cfg.ev_iter = ev_iter
-                
             hook = build_from_cfg(hook_cfg, HOOK)
             self.register_hook(hook, priority=priority)
-        
   
         
       
@@ -352,7 +311,7 @@ class Runner:
             param groups. If the runner has a dict of optimizers, this method
             will return a dict.
         """
-        if isinstance(self.optimizer, torch.optim.Optimizer):
+        if isinstance(self.optimizer, torch.optim.Optimizer):           # 
             lr = [group['lr'] for group in self.optimizer.param_groups]
         elif isinstance(self.optimizer, dict):
             lr = dict()
@@ -361,6 +320,7 @@ class Runner:
         else:
             raise RuntimeError(
                 'lr is not applicable because optimizer does not exist.')
+      
         return lr
 
     def current_momentum(self):
@@ -419,8 +379,11 @@ class Runner:
             raise TypeError(
                 f'meta should be a dict or None, but got {type(meta)}')
         
+        
         if self.meta is not None:
-            meta.update(self.meta)
+            runner_meta = self.meta.copy()
+            runner_meta.pop("config")
+            meta.update(runner_meta)
 
         if model_cfg is not None:
             meta.update(model_cfg = model_cfg)
@@ -432,6 +395,7 @@ class Runner:
         filename = filename_tmpl.format(self._epoch)
         filepath = osp.join(out_dir, filename)
         optimizer = self.optimizer if save_optimizer else None
+        
         sc_save_checkpoint(self.model, filepath, optimizer=optimizer, meta=meta)
     
     
@@ -530,12 +494,18 @@ class LogBuffer:
         
     
     def log(self, n):
-      
         for key in self.val_history:
             values = np.array(self.val_history[key][-n:])
             nums = np.array(self.n_history[key][-n:])
             avg = np.sum(values * nums) / np.sum(nums)
             self.log_output[key] = avg
+            
+            
+    def get_last(self):
+        output = dict()
+        for key in self.val_history:
+            output[key] = self.val_history[key][-1]
+        return output
     
     def clear_log(self):
         self.log_output.clear()

@@ -1,6 +1,6 @@
 import warnings
-from hibernation_no1.mmdet.data.transforms.compose import Compose, PIPELINES
-from hibernation_no1.utils.utils import is_list_of
+from docker.hibernation_no1.mmdet.data.transforms.compose import Compose, PIPELINES
+from docker.hibernation_no1.utils.utils import is_list_of
 
 @PIPELINES.register_module()
 class MultiScaleFlipAug:        

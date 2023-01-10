@@ -9,7 +9,7 @@ from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.instancenorm import _InstanceNorm
 
 
-from hibernation_no1.mmdet.utils import auto_scale_lr
+from docker.hibernation_no1.mmdet.utils import auto_scale_lr
 
 def build_optimizer(model, whole_cfg, logger):
     auto_scale_lr(whole_cfg, logger)
@@ -21,7 +21,7 @@ def build_optimizer(model, whole_cfg, logger):
     
     optim_constructor = DefaultOptimizerConstructor(**Constructor_cfg)
     
-    optimizer = optim_constructor(model)
+    optimizer = optim_constructor(model)        # __call__
     return optimizer
 
 
@@ -226,7 +226,8 @@ class DefaultOptimizerConstructor:
                         decay_mult = custom_keys[key].get('decay_mult', 1.)
                         param_group['weight_decay'] = self.base_wd * decay_mult
                     break 
-            
+                    
+    
             if not is_custom:
                 # bias_lr_mult affects all bias parameters
                 # except for norm.bias dcn.conv_offset.bias
@@ -244,7 +245,7 @@ class DefaultOptimizerConstructor:
                         param_group['weight_decay'] = self.base_wd * bias_decay_mult
 
             params.append(param_group)
-            
+        
         for child_name, child_mod in module.named_children():
             child_prefix = f'{prefix}.{child_name}' if prefix else child_name
             self.add_params(

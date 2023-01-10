@@ -8,8 +8,8 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 
-from hibernation_no1.mmdet.data.datacontainer import DataContainer
-from hibernation_no1.mmdet.data.sampler import GroupSampler
+from docker.hibernation_no1.mmdet.data.datacontainer import DataContainer
+from docker.hibernation_no1.mmdet.data.sampler import GroupSampler
 
 
 def worker_init_fn(worker_id, num_workers, seed):

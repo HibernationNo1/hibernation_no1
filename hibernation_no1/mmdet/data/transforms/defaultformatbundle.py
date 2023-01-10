@@ -1,8 +1,8 @@
 import numpy as np
 
-from hibernation_no1.mmdet.data.transforms.compose import PIPELINES
-from hibernation_no1.mmdet.data.datacontainer import DataContainer as DC
-from hibernation_no1.mmdet.utils import to_tensor
+from docker.hibernation_no1.mmdet.data.transforms.compose import PIPELINES
+from docker.hibernation_no1.mmdet.data.datacontainer import DataContainer as DC
+from docker.hibernation_no1.mmdet.utils import to_tensor
 
 @PIPELINES.register_module()
 class DefaultFormatBundle:

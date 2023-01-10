@@ -33,7 +33,7 @@ from .hooks.hook import Hook
 from .hooks.itertime import IterTimerHook
 from .hooks.logger import LoggerHook
 from .hooks.optimizer import OptimizerHook
-from .hooks.stepupdater import StepLrUpdaterHook
+from .hooks.steplrupdater import StepLrUpdaterHook
 
 from .modules.dataparallel import build_dp, DataParallel
 from .modules.register_module import *

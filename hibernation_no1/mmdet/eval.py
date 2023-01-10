@@ -1,5 +1,6 @@
 import numpy as np
-from hibernation_no1.mmdet.inference import inference_detector, parse_inferece_result
+from docker.hibernation_no1.mmdet.inference import inference_detector, parse_inferece_result
+from docker.hibernation_no1.mmdet.visualization import mask_to_polygon
 
 def compute_iou(infer_box, gt_box):
     """
@@ -20,7 +21,10 @@ def compute_iou(infer_box, gt_box):
     h = max(0, y2 - y1)
 
     inter = w * h
-    iou = inter / (box1_area + box2_area - inter)
+    outer = (box1_area + box2_area - inter)
+    if outer == 0:
+        return 1.0
+    iou = inter / outer
     return iou
 
 
@@ -107,11 +111,10 @@ def get_box_from_pol(polygon):
                 
 
 class Evaluate():
-    def __init__(self, model, cfg, dataloader, mask_to_polygon):
+    def __init__(self, model, cfg, dataloader):
         self.model = model
         self.cfg = cfg
         self.dataloader = dataloader
-        self.mask_to_polygon = mask_to_polygon
         self.classes = self.model.CLASSES
         self.confusion_matrix = dict()
         self.set_treshold()
@@ -288,8 +291,8 @@ class Evaluate():
                 i_bboxes = i_bboxes[:, :4]      # [num_instance, [x_min, y_min, x_max, y_max]]
 
                 
-                i_polygons = self.mask_to_polygon(i_mask)
-                gt_polygons = self.mask_to_polygon(gt_mask.masks)
+                i_polygons = mask_to_polygon(i_mask)
+                gt_polygons = mask_to_polygon(gt_mask.masks)
             else:   # detected nothing
                 i_cores = i_bboxes = i_polygons = gt_polygons = []
                 

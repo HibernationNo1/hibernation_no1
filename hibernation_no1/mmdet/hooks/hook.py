@@ -1,4 +1,4 @@
-from hibernation_no1.mmdet.registry import Registry
+from docker.hibernation_no1.mmdet.registry import Registry
 
 HOOK = Registry('hook')
 
@@ -128,20 +128,7 @@ class Hook:
     def compute_remain_time(self, taken_time, max_iters):
         remain_iter = max_iters - self.iter_count
         return self.compute_sec_to_h_d(taken_time * remain_iter)           
-        
-    
-    def get_epoch(self, runner):
-        if runner.mode == 'train':
-            epoch = runner.epoch
-        elif runner.mode == 'val':
-            # normal val mode
-            # runner.epoch += 1 has been done before val workflow
-            epoch = runner.epoch
-        else:
-            raise ValueError(f"runner mode should be 'train' or 'val', "
-                             f'but got {runner.mode}')
-        return epoch
-    
+            
     
     def compute_sec_to_h_d(self, sec):
         if sec <=0: return "00:00:00"

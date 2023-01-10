@@ -1,7 +1,7 @@
 
-from hibernation_no1.mmdet.modules.base.module import BaseModule
-from hibernation_no1.mmdet.registry import build_from_cfg
-from hibernation_no1.mmdet.modules.register_module import BACKBORN, NECK, RPN_HEAD, ROI_HEAD
+from docker.hibernation_no1.mmdet.modules.base.module import BaseModule
+from docker.hibernation_no1.mmdet.registry import build_from_cfg
+from docker.hibernation_no1.mmdet.modules.register_module import BACKBORN, NECK, RPN_HEAD, ROI_HEAD
 
 import torch
 
@@ -19,8 +19,9 @@ class MaskRCNN(BaseModule):
         self.neck = build_from_cfg(neck, NECK)   
         self.rpn_head = build_from_cfg(rpn_head, RPN_HEAD)   
         self.roi_head = build_from_cfg(roi_head, ROI_HEAD)   
-          
-        self.rpn_proposal_cfg = rpn_head.train_cfg.pop('rpn_proposal')
+        
+        self.CLASSES = None
+        self.rpn_proposal_cfg = rpn_head.train_cfg.get('rpn_proposal', None)
         
     # @auto_fp16(apply_to=('img', ))
     def forward(self, img, img_metas, return_loss=True, **kwargs):

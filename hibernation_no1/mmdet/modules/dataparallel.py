@@ -1,16 +1,21 @@
 
 from itertools import chain
 from torch.nn.parallel import DataParallel
-from hibernation_no1.mmdet.scatter import scatter_inputs
+from docker.hibernation_no1.mmdet.scatter import scatter_inputs
 
-def build_dp(model, cfg, device='cuda', dim=0, **kwargs):
+def build_dp(model, cfg = None, device='cuda', dim=0, **kwargs):
     if device == 'cuda': 
         model = model.cuda()
     
+    if kwargs.get('classes', None) is not None:
+        model.CLASSES = kwargs['classes']
+        
     model = MMDataParallel(model, dim=dim) 
     if kwargs.get('classes', None) is not None:
         model.CLASSES = kwargs['classes']
-    model.cfg = cfg
+        
+    if cfg is not None:
+        model.cfg = cfg     # used for validation and inference
     return model
     
     

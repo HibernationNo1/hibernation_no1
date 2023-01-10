@@ -5,8 +5,8 @@ import cv2
 import numbers
 import torch
 
-from hibernation_no1.mmdet.data.transforms.compose import PIPELINES
-from hibernation_no1.mmdet.data.transforms.utils import imresize, imrescale, rescale_size, imflip
+from docker.hibernation_no1.mmdet.data.transforms.compose import PIPELINES
+from docker.hibernation_no1.mmdet.data.transforms.utils import imresize, imrescale, rescale_size, imflip
 
 from mmcv.ops.roi_align import RoIAlignFunction
 roi_align = RoIAlignFunction.apply
@@ -119,6 +119,23 @@ class LoadAnnotations:
         """
 
         if isinstance(mask_ann, list):
+            # mask_ann_int = []
+            
+            # for poligon in mask_ann:
+            #     int_poligon = []
+            #     x_y_point = []
+            #     for i, coodinate in enumerate(poligon):
+            #         if (i+1) % 2 != 0:
+            #             x_y_point.append(int(coodinate))
+            #         else: 
+            #             x_y_point.append(int(coodinate))
+            #             int_poligon.append(x_y_point)
+            #             x_y_point = []
+                
+            #     mask_ann_int.append(int_poligon)
+                
+            # mask_ann_int = np.array(mask_ann_int, np.uint8)
+            
             # polygon -- a single object might consist of multiple parts
             # we merge all parts into one mask rle code
             rles = maskUtils.frPyObjects(mask_ann, img_h, img_w)
@@ -130,6 +147,8 @@ class LoadAnnotations:
             # rle
             rle = mask_ann
         mask = maskUtils.decode(rle)
+        print(f"mask : {mask}")
+        exit()
         return mask
 
 
