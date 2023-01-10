@@ -5,8 +5,8 @@ import cv2
 import numbers
 import torch
 
-from docker.hibernation_no1.mmdet.data.transforms.compose import PIPELINES
-from docker.hibernation_no1.mmdet.data.transforms.utils import imresize, imrescale, rescale_size, imflip
+from hibernation_no1.mmdet.data.transforms.compose import PIPELINES
+from hibernation_no1.mmdet.data.transforms.utils import imresize, imrescale, rescale_size, imflip
 
 from mmcv.ops.roi_align import RoIAlignFunction
 roi_align = RoIAlignFunction.apply

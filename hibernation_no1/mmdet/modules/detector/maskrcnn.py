@@ -1,7 +1,7 @@
 
-from docker.hibernation_no1.mmdet.modules.base.module import BaseModule
-from docker.hibernation_no1.mmdet.registry import build_from_cfg
-from docker.hibernation_no1.mmdet.modules.register_module import BACKBORN, NECK, RPN_HEAD, ROI_HEAD
+from hibernation_no1.mmdet.modules.base.module import BaseModule
+from hibernation_no1.mmdet.registry import build_from_cfg
+from hibernation_no1.mmdet.modules.register_module import BACKBORN, NECK, RPN_HEAD, ROI_HEAD
 
 import torch
 

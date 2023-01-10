@@ -1,5 +1,5 @@
 
-from docker.hibernation_no1.mmdet.registry import Registry, build_from_cfg
+from hibernation_no1.mmdet.registry import Registry, build_from_cfg
 
 PIPELINES = Registry('pipeline')
 

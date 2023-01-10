@@ -4,8 +4,8 @@ import json
 import time
 from collections import OrderedDict
 
-from docker.hibernation_no1.utils.utils import is_list_of, is_tuple_of, dict_to_pretty
-from docker.hibernation_no1.mmdet.hooks.hook import Hook, HOOK
+from hibernation_no1.utils.utils import is_list_of, is_tuple_of, dict_to_pretty
+from hibernation_no1.mmdet.hooks.hook import Hook, HOOK
 from typing import Optional, Dict
 
 @HOOK.register_module()

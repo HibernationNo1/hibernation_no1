@@ -1,8 +1,8 @@
 import time
 from torch.utils.data import DataLoader
 
-from docker.hibernation_no1.mmdet.hooks.hook import Hook, HOOK
-from docker.hibernation_no1.mmdet.eval import Evaluate
+from hibernation_no1.mmdet.hooks.hook import Hook, HOOK
+from hibernation_no1.mmdet.eval import Evaluate
 from torch.utils.tensorboard import SummaryWriter
 
 @HOOK.register_module()

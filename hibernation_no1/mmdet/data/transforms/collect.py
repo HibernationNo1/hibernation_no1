@@ -1,5 +1,5 @@
-from docker.hibernation_no1.mmdet.data.transforms.compose import PIPELINES
-from docker.hibernation_no1.mmdet.data.datacontainer import DataContainer as DC
+from hibernation_no1.mmdet.data.transforms.compose import PIPELINES
+from hibernation_no1.mmdet.data.datacontainer import DataContainer as DC
 
 
 @PIPELINES.register_module()

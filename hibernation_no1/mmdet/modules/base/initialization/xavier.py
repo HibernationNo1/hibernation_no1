@@ -1,6 +1,6 @@
 
 import torch.nn as nn
-from docker.hibernation_no1.mmdet.modules.base.initialization.utils import BaseInit, update_init_info
+from hibernation_no1.mmdet.modules.base.initialization.utils import BaseInit, update_init_info
 
     
 class XavierInit(BaseInit):

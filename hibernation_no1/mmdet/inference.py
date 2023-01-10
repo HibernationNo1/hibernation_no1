@@ -2,11 +2,11 @@ import numpy as np
 import torch
 import itertools
 
-from docker.hibernation_no1.mmdet.data.transforms.utils import replace_ImageToTensor
-from docker.hibernation_no1.mmdet.data.transforms.compose import Compose
-from docker.hibernation_no1.mmdet.data.dataloader import collate
-from docker.hibernation_no1.mmdet.scatter import parallel_scatter
-from docker.hibernation_no1.mmdet.checkpoint import load_checkpoint     
+from hibernation_no1.mmdet.data.transforms.utils import replace_ImageToTensor
+from hibernation_no1.mmdet.data.transforms.compose import Compose
+from hibernation_no1.mmdet.data.dataloader import collate
+from hibernation_no1.mmdet.scatter import parallel_scatter
+from hibernation_no1.mmdet.checkpoint import load_checkpoint     
 
 def build_detector(cfg, model_path, device='cuda:0', logger = None):
     checkpoint = load_checkpoint(model_path, logger = logger)
@@ -27,7 +27,7 @@ def build_detector(cfg, model_path, device='cuda:0', logger = None):
     # TODO : build with registry
     if model_cfg.type == 'MaskRCNN':
         model_cfg.pop("type")
-        from docker.hibernation_no1.mmdet.modules.detector.maskrcnn import MaskRCNN
+        from hibernation_no1.mmdet.modules.detector.maskrcnn import MaskRCNN
         model = MaskRCNN(**model_cfg)        
         
     if 'CLASSES' in checkpoint.get('meta', {}):

@@ -1,7 +1,7 @@
 import cv2
 import os, os.path as osp
 import numpy as np
-from docker.hibernation_no1.mmdet.data.transforms.compose import PIPELINES
+from hibernation_no1.mmdet.data.transforms.compose import PIPELINES
 
 
 @PIPELINES.register_module()

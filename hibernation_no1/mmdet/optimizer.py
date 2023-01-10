@@ -9,7 +9,7 @@ from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.instancenorm import _InstanceNorm
 
 
-from docker.hibernation_no1.mmdet.utils import auto_scale_lr
+from hibernation_no1.mmdet.utils import auto_scale_lr
 
 def build_optimizer(model, whole_cfg, logger):
     auto_scale_lr(whole_cfg, logger)

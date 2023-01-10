@@ -1,6 +1,6 @@
 import numpy as np
-from docker.hibernation_no1.mmdet.inference import inference_detector, parse_inferece_result
-from docker.hibernation_no1.mmdet.visualization import mask_to_polygon
+from hibernation_no1.mmdet.inference import inference_detector, parse_inferece_result
+from hibernation_no1.mmdet.visualization import mask_to_polygon
 
 def compute_iou(infer_box, gt_box):
     """

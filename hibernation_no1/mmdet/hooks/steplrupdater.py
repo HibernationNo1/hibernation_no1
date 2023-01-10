@@ -1,6 +1,6 @@
 from typing import List, Optional, Union
  
-from docker.hibernation_no1.mmdet.hooks.hook import Hook, HOOK
+from hibernation_no1.mmdet.hooks.hook import Hook, HOOK
 
 @HOOK.register_module()
 class StepLrUpdaterHook(Hook):
