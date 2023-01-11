@@ -147,8 +147,6 @@ class LoadAnnotations:
             # rle
             rle = mask_ann
         mask = maskUtils.decode(rle)
-        print(f"mask : {mask}")
-        exit()
         return mask
 
 
