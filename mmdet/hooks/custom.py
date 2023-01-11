@@ -83,10 +83,12 @@ class Validation_Hook(Hook):
 @HOOK.register_module()
 class TensorBoard_Hook(Hook):
     def __init__(self,
+                 pvc_dir = None,
                  out_dir = None,
                  interval = ['iter', 50]):
         self.unit, self.timing = interval[0], interval[1]
-        self.writer = SummaryWriter(log_dir = out_dir)
+        self.writer_pvc = SummaryWriter(log_dir = pvc_dir)
+        self.writer_result_dir = SummaryWriter(log_dir = out_dir)
     
     
     def after_train_iter(self, runner) -> None: 
@@ -121,11 +123,16 @@ class TensorBoard_Hook(Hook):
             if category == "loss":
                 if key == "loss": 
                     name = 'total_loss'
-                self.writer.add_scalar(f"Loss/{name}", item, runner._iter)
+                self.writer_pvc.add_scalar(f"Loss/{name}", item, runner._iter)
+                self.writer_result_dir.add_scalar(f"Loss/{name}", item, runner._iter)
+                
             elif category == "acc":
-                self.writer.add_scalar(f"Acc/{name}", item, runner._iter)
+                self.writer_pvc.add_scalar(f"Acc/{name}", item, runner._iter)
+                self.writer_result_dir.add_scalar(f"Acc/{name}", item, runner._iter)
+                
             else:
-                self.writer.add_scalar(f"else/{name}", item, runner._iter)
+                self.writer_pvc.add_scalar(f"else/{name}", item, runner._iter)
+                self.writer_result_dir.add_scalar(f"else/{name}", item, runner._iter)
                 
 
     def after_run(self, runner):
