@@ -136,7 +136,8 @@ class TensorBoard_Hook(Hook):
                 
 
     def after_run(self, runner):
-        self.writer.close()
+        self.writer_pvc.close()
+        self.writer_result_dir.close()
 
 
 @HOOK.register_module()
