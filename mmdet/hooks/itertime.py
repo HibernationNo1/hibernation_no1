@@ -29,9 +29,9 @@ class IterTimerHook(Hook):
             remain_time = self.compute_remain_time(self.sum_time_iter/self.iter_count, runner._max_iters)
             
             # estimated time of arrival
-            print(f"eta: [{remain_time}]\
-                    epoch: [{runner.epoch}/{runner._max_epochs}]\
-                    iter: [{runner._inner_iter}/{runner._iterd_per_epochs}]")
+            # print(f"eta: [{remain_time}]\
+            #         epoch: [{runner.epoch}/{runner._max_epochs}]\
+            #         iter: [{runner._inner_iter}/{runner._iterd_per_epochs}]")
                 
         self.t = time.time()
 
