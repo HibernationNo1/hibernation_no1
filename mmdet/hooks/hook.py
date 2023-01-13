@@ -1,3 +1,6 @@
+import psutil
+import torch
+
 from hibernation_no1.mmdet.registry import Registry
 
 HOOK = Registry('hook')
@@ -143,3 +146,46 @@ class Hook:
         
         day = hour//24
         return f"{day}day {f'{int(hour%24)}'.zfill(2)}:{f'{int(minute%(60))}'.zfill(2)}:{f'{int(sec%(60))}'.zfill(2)}"
+    
+    
+    
+    def get_memory_info(self, runner) :
+        """
+            Size of tensor allocated to GPU and RAM(unit: GB)
+        """
+        device = getattr(runner.model, 'output_device', None)
+        m_mem = torch.cuda.max_memory_allocated(device=device)
+        c_mem = torch.cuda.memory_allocated(device=device)
+        
+        mem_get_info = torch.cuda.mem_get_info(device=device)
+        torch_total = mem_get_info[1] / 1024**3 
+        torch_free = mem_get_info[0] / 1024**3
+        torch_used = torch_total - torch_free
+        torch_max_allocated = m_mem / 1024**3
+        torch_cerrent_allocated = c_mem / 1024**3
+        torch_leakage = torch_used - torch_cerrent_allocated
+        torch_percent = f"{torch_used / torch_total * 100:.2f} %"
+         
+        ram_memory = psutil.virtual_memory()
+        
+        memory = dict(
+            GPU = dict(
+                total = torch_total,
+                free = torch_free,
+                used = torch_used,
+                max_allocated_tensor = torch_max_allocated,
+                allocated_tensor = torch_cerrent_allocated,
+                leakage = torch_leakage,
+                percent = torch_percent
+                ),
+            RAM = dict(
+                total = ram_memory.total/1024**3,
+                free = ram_memory.available/1024**3,
+                used = ram_memory.used/1024**3,
+                percent = f"{ram_memory.percent} %"
+                )
+            )
+        
+
+        return memory
+    

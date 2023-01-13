@@ -2,6 +2,8 @@ import torch
 import os, os.path as osp
 import json
 import time
+import psutil
+
 from collections import OrderedDict
 
 from hibernation_no1.utils.utils import is_list_of, is_tuple_of, dict_to_pretty
@@ -77,6 +79,7 @@ class LoggerHook(Hook):
             return round(items, 5)
         else:
             return items
+        
     
     
     def _get_max_memory(self, runner) :
@@ -84,8 +87,9 @@ class LoggerHook(Hook):
             Size of tensor allocated to GPU (unit: MB)
         """
         device = getattr(runner.model, 'output_device', None)
-        mem = torch.cuda.max_memory_allocated(device=device)
-        mem_mb = torch.tensor([int(mem) // (1024 * 1024)],
+        m_mem = torch.cuda.max_memory_allocated(device=device) 
+        
+        mem_mb = torch.tensor([int(m_mem) // (1024 * 1024)],
                               dtype=torch.int,
                               device=device)
         return mem_mb.item()
@@ -101,38 +105,55 @@ class LoggerHook(Hook):
                 exp_info = f'Exp name: {runner.meta["exp_name"]}'
                 runner.logger.info(exp_info)
 
-        
-        if isinstance(log_dict['lr'], dict):
-            lr_str = []
-            for k, val in log_dict['lr'].items():
-                lr_str.append(f'lr_{k}: {val:.3e}')
-            lr_str = ' '.join(lr_str)  # type: ignore
-        else:
-            lr_str = f'lr: {log_dict["lr"]:.3e}'  # type: ignore
-
-        # by epoch: Epoch [4][100/1000]
-        # by iter:  Iter [100/100000]
-        
+        # log about epoch, iter
         log_str = f'Epoch [{log_dict["epoch"]}]' \
                     f'[{log_dict["iter"]}/{len(runner.train_dataloader)}]\t'
-        log_str += f'{lr_str}, '
-
+        
+        # log about time
         import datetime
         if 'time' in log_dict.keys():
             self.time_sec_tot += (log_dict['time'] * self.interval)
             time_sec_avg = self.time_sec_tot / (
                 runner.iter - self.start_iter)
             eta_sec = time_sec_avg * (runner.max_iters - runner.iter - 1)
-            eta_str = str(datetime.timedelta(seconds=int(eta_sec)))     
+            eta_str = str(datetime.timedelta(seconds=int(eta_sec))) 
+            log_str += f'\n>>   '    
             log_str += f'eta: {eta_str}, '
             log_str += f'time: {log_dict["time"]:.3f}, ' \
                         f'data_time: {log_dict["data_time"]:.3f}, '
-            # statistic memory
+                
+        
+            # log about momory
             if torch.cuda.is_available():
-                log_str += f'memory: {log_dict["memory"]}, '
-        
+                
+                memory = self.get_memory_info(runner)
+                GPU_total = memory['GPU']['total']
+                GPU_used = memory['GPU']['used']
+                GPU_percent = memory['GPU']['percent']
+                
+                RAM_total = memory['RAM']['total']
+                RAM_used = memory['RAM']['used']
+                RAM_percent = memory['RAM']['percent']
+                
+                log_str += f'\n>>   ' 
+                log_str += f'GPU memory [total: {GPU_total:.2f},   using: {GPU_used:.2f},  usage: {GPU_percent}]'
+                log_str += f'\n>>   '  
+                log_str += f'RAM memory [total: {RAM_total:.2f},   using: {RAM_used:.2f},  usage: {RAM_percent}]' 
+                
+                
+            # log about training    
+            if isinstance(log_dict['lr'], dict):
+                lr_str = []
+                for k, val in log_dict['lr'].items():
+                    lr_str.append(f'lr_{k}: {val:.3e}')
+                lr_str = ' '.join(lr_str)  # type: ignore
+            else:
+                lr_str = f'lr: {log_dict["lr"]:.3e}'  # type: ignore
 
-        
+            log_str += f'\n>>   ' 
+            log_str += f'{lr_str}, '
+            log_str += f'\n'
+
         
         log_items = []
         for name, val in log_dict.items():
@@ -148,7 +169,6 @@ class LoggerHook(Hook):
             log_items.append(f'{name}: {val}')
         
         log_str += ', '.join(log_items)
-        
         
         runner.logger.info(log_str)
 
@@ -349,11 +369,6 @@ class LoggerHook(Hook):
             for k, lr_ in cur_lr.items():
                 assert isinstance(lr_, list)
                 log_dict['lr'].update({k: lr_[0]})
-                
-        if 'time' in runner.log_buffer.output:
-            # statistic memory
-            if torch.cuda.is_available():
-                log_dict['memory'] = self._get_max_memory(runner)
         
         log_dict = dict(log_dict, **runner.log_buffer.output) 
         self._log_info(log_dict, runner)

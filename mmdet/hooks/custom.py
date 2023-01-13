@@ -70,7 +70,7 @@ class Validation_Hook(Hook):
             log_str +=f"{key}: {item},     "
             
             
-        datatime = compute_sec_to_h_d(time.time() - runner.start_time)
+        datatime = self.compute_sec_to_h_d(time.time() - runner.start_time)
         log_str+=f"datatime: {datatime}"
         
         if self.logger is not None:
@@ -87,14 +87,18 @@ class TensorBoard_Hook(Hook):
                  out_dir = None,
                  interval = ['iter', 50]):
         self.unit, self.timing = interval[0], interval[1]
-        self.writer_pvc = SummaryWriter(log_dir = pvc_dir)
+        self.pvc_dir = pvc_dir
         self.writer_result_dir = SummaryWriter(log_dir = out_dir)
+        self.tmp_count = 0
     
     
     def after_train_iter(self, runner) -> None: 
         if self.unit == 'iter' and\
             self.every_n_inner_iters(runner, self.timing):  
             self.write_to_board(runner)
+            
+            self.tmp_count+=1
+            if self.tmp_count == 5: exit()
     
                 
     def after_train_epoch(self, runner) -> None: 
@@ -103,7 +107,13 @@ class TensorBoard_Hook(Hook):
             self.write_to_board(runner)
               
         
-    def write_to_board(self, runner):
+    def writer_meta(self, board_path, value, runner):
+        if runner.in_pipeline:      # save pvc path only run by kubeflow pipeline
+            self.writer_pvc.add_scalar(board_path, value, runner._iter)
+        self.writer_result_dir.add_scalar(board_path, value, runner._iter)
+            
+            
+    def write_to_board(self, runner):   
         log_dict = runner.log_buffer.get_last()
         if log_dict.get("data_time", None) is not None: del log_dict['data_time']
         if log_dict.get("time", None) is not None: del log_dict['time']
@@ -114,8 +124,7 @@ class TensorBoard_Hook(Hook):
         
         if len(runner.val_result)>0:
             log_dict['acc_mAP'] = runner.val_result[-1]['mAP']
-            
-        
+                    
         for key, item in log_dict.items():
             category = key.split("_")[0]
             name = key.split("_")[-1]
@@ -123,21 +132,36 @@ class TensorBoard_Hook(Hook):
             if category == "loss":
                 if key == "loss": 
                     name = 'total_loss'
-                self.writer_pvc.add_scalar(f"Loss/{name}", item, runner._iter)
-                self.writer_result_dir.add_scalar(f"Loss/{name}", item, runner._iter)
-                
+                self.writer_meta(f"Loss/{name}", item, runner)
+                    
             elif category == "acc":
-                self.writer_pvc.add_scalar(f"Acc/{name}", item, runner._iter)
-                self.writer_result_dir.add_scalar(f"Acc/{name}", item, runner._iter)
+                self.writer_meta(f"Acc/{name}", item, runner)
                 
             else:
-                self.writer_pvc.add_scalar(f"else/{name}", item, runner._iter)
-                self.writer_result_dir.add_scalar(f"else/{name}", item, runner._iter)
+                self.writer_meta(f"else/{name}", item, runner)
                 
-
+                
+        memory = self.get_memory_info(runner)
+        
+        
+        for key_i, item_i in memory.items():
+            for key_j, item_j in item_i.items():
+                if key_j == "percent": 
+                    item_j = float(item_j.split("%")[0])
+                elif key in ["max_allocated_tensor", "leakage", "free"]: continue
+                
+ 
+                self.writer_meta(f"memory/{key_i}_{key_j}", item_j, runner)
+             
+    
+    def before_run(self, runner):
+        if runner.in_pipeline: 
+            self.writer_pvc = SummaryWriter(log_dir = self.pvc_dir)
+                
     def after_run(self, runner):
         self.writer_pvc.close()
         self.writer_result_dir.close()
+
 
 
 @HOOK.register_module()
@@ -159,6 +183,9 @@ class Check_Hook(Hook):
         """
         self._check_head(runner)
         
+    def after_train_iter(self, runner) -> None: 
+        self.check_memory_leakage(runner)
+        self.check_memory_allocated(runner)
         
     def _check_head(self, runner):
         """Check whether the `num_classes` in head matches the length of
@@ -198,17 +225,24 @@ class Check_Hook(Hook):
                     #          f'{dataset.__class__.__name__}')
                 pass
             
-            
-def compute_sec_to_h_d(sec):
-    if sec <=0: return "00:00:00"
     
-    if sec < 60: return f'00:00:{f"{int(sec)}".zfill(2)}'
+    def check_memory_leakage(self, runner):
+        memory = self.get_memory_info(runner)
+        GPU_total = memory['GPU']['total']
+        GPU_used = memory['GPU']['used']
+        GPU_allocated_tensor = memory['GPU']['allocated_tensor']
+        GPU_leakage = memory['GPU']['leakage']
+        # TODO: what is GPU_leakage?
+        
+  
+                
     
-    minute = sec//60
-    if minute < 60: return f"00:{f'{int(minute)}'.zfill(2)}:{f'{int(sec%60)}'.zfill(2)}"
-    
-    hour = minute//60
-    if hour < 24: return f"{f'{int(hour)}'.zfill(2)}:{f'{int(minute%60)}'.zfill(2)}:{f'{int(sec%60)}'.zfill(2)}"
-    
-    day = hour//24
-    return f"{day}day {f'{int(hour%24)}'.zfill(2)}:{f'{int(minute%(60))}'.zfill(2)}:{f'{int(sec%(60))}'.zfill(2)}"
+    def check_memory_allocated(self, runner):
+        memory = self.get_memory_info(runner)
+        RAM_memory_usage = float(memory['RAM']['percent'].split("%")[0])
+        GPU_memory_usage = float(memory['GPU']['percent'].split("%")[0])
+        
+        if RAM_memory_usage > 93:   
+            raise OSerror(f"Memory resource usage: {RAM_memory_usage}% , process terminate!!")
+                    
+       
