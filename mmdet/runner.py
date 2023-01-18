@@ -57,6 +57,7 @@ class Runner:
     def __init__(self,
                  model,
                  iterd_per_epochs,
+                 in_pipeline = False,       # whether run code with kubeflow pipeline
                  max_iters=None,
                  max_epochs=None,
                  optimizer=None,
@@ -94,7 +95,7 @@ class Runner:
         self.batch_size = kwargs.get('batch_size', None)
          
         self.model = model
-    
+        self.in_pipeline = in_pipeline
         self.optimizer = optimizer
         self.logger = logger
         self.meta = meta
