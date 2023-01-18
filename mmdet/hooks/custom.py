@@ -1,3 +1,4 @@
+import os, os.path as osp
 import time
 from torch.utils.data import DataLoader
 
@@ -63,15 +64,18 @@ class Validation_Hook(Hook):
                 continue
             elif key == "inner_iter":
                 log_str +=f"[{item}/{runner._iterd_per_epochs}]     "
-                continue
-            
+                log_str +=f"\n>>   "
+                continue                
             if type(item) == float:
                 item = round(item, 4)
             log_str +=f"{key}: {item},     "
-            
-            
+            if key == "mAP":
+                log_str +=f"\n>>   "
+                    
+        log_str +=f"\n>>   "
         datatime = self.compute_sec_to_h_d(time.time() - runner.start_time)
         log_str+=f"datatime: {datatime}"
+        log_str +=f"\n"
         
         if self.logger is not None:
             self.logger.info(log_str)
@@ -88,17 +92,12 @@ class TensorBoard_Hook(Hook):
                  interval = ['iter', 50]):
         self.unit, self.timing = interval[0], interval[1]
         self.pvc_dir = pvc_dir
-        self.writer_result_dir = SummaryWriter(log_dir = out_dir)
-        self.tmp_count = 0
-    
+        self.writer_result_dir = SummaryWriter(log_dir = out_dir)    
     
     def after_train_iter(self, runner) -> None: 
         if self.unit == 'iter' and\
             self.every_n_inner_iters(runner, self.timing):  
             self.write_to_board(runner)
-            
-            self.tmp_count+=1
-            if self.tmp_count == 5: exit()
     
                 
     def after_train_epoch(self, runner) -> None: 
@@ -148,7 +147,7 @@ class TensorBoard_Hook(Hook):
             for key_j, item_j in item_i.items():
                 if key_j == "percent": 
                     item_j = float(item_j.split("%")[0])
-                elif key in ["max_allocated_tensor", "leakage", "free"]: continue
+                elif key_j in ["max_allocated_tensor", "leakage", "free", "total"]: continue
                 
  
                 self.writer_meta(f"memory/{key_i}_{key_j}", item_j, runner)
@@ -156,6 +155,8 @@ class TensorBoard_Hook(Hook):
     
     def before_run(self, runner):
         if runner.in_pipeline: 
+            if not osp.isdir(self.pvc_dir):
+                os.makedirs(self.pvc_dir, exist_ok=True)
             self.writer_pvc = SummaryWriter(log_dir = self.pvc_dir)
                 
     def after_run(self, runner):
