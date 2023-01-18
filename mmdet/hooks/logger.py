@@ -136,9 +136,9 @@ class LoggerHook(Hook):
                 RAM_percent = memory['RAM']['percent']
                 
                 log_str += f'\n>>   ' 
-                log_str += f'GPU memory [total: {GPU_total:.2f},   using: {GPU_used:.2f},  usage: {GPU_percent}]'
+                log_str += f'GPU memory [total: {GPU_total:.2f}GB,   using: {GPU_used:.2f}GB,  usage: {GPU_percent}]'
                 log_str += f'\n>>   '  
-                log_str += f'RAM memory [total: {RAM_total:.2f},   using: {RAM_used:.2f},  usage: {RAM_percent}]' 
+                log_str += f'RAM memory [total: {RAM_total:.2f}GB,   using: {RAM_used:.2f}GB,  usage: {RAM_percent}]' 
                 
                 
             # log about training    
@@ -152,7 +152,7 @@ class LoggerHook(Hook):
 
             log_str += f'\n>>   ' 
             log_str += f'{lr_str}, '
-            log_str += f'\n'
+            log_str += f'\n>>   ' 
 
         
         log_items = []
@@ -169,6 +169,7 @@ class LoggerHook(Hook):
             log_items.append(f'{name}: {val}')
         
         log_str += ', '.join(log_items)
+        log_str +='\n'
         
         runner.logger.info(log_str)
 
