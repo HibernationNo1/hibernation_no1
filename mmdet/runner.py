@@ -136,9 +136,6 @@ class Runner:
         
         self.log_buffer = LogBuffer()
         
-        
-        
-        
     def run(self, 
             train_dataloader, 
             **kwargs):
@@ -171,7 +168,6 @@ class Runner:
         time.sleep(1)  # wait for some hooks like loggers to finish
         self.call_hook('after_run')
         
-        
     def run_iter(self, data_batch):
 
         # MMDataParallel.train_step
@@ -188,7 +184,7 @@ class Runner:
         
         self.outputs = outputs
             
-        
+      
                 
     def train(self, train_dataloader, **kwargs):
         self.model.train()
@@ -201,13 +197,15 @@ class Runner:
             # data_batch.keys() = ['img_metas', 'img', 'gt_bboxes', 'gt_labels', 'gt_masks']
             self.data_batch = data_batch        
             self._inner_iter = i+1
+
             self.call_hook('before_train_iter')
             # self.outputs: 
-            # loss:total loss, log_vars: log_vars, num_samples: batch_size
+            #   loss:total loss, log_vars: log_vars, num_samples: batch_size
             self.run_iter(data_batch)
+            del self.data_batch     # preventing memory leaks
+            torch.cuda.empty_cache()
+            
             self.call_hook('after_train_iter')
-
-            del self.data_batch
             self._iter += 1
         self.call_hook('after_train_epoch')
         self._epoch += 1
@@ -231,6 +229,7 @@ class Runner:
         """
         for hook in self._hooks:
             getattr(hook, fn_name)(self)   
+ 
        
     def register_hook(self, hook, priority='NORMAL'):
         """Register a hook into the hook list.
