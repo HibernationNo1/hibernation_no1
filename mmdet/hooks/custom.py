@@ -10,18 +10,17 @@ from torch.utils.tensorboard import SummaryWriter
 class Validation_Hook(Hook):
     def __init__(self,
                  val_dataloader: DataLoader,
-                 val_cfg,
                  logger, 
-                 interval = ['iter', 50]
+                 interval = ['iter', 50],
+                 val_cfg = None
                 ):
         self.iter_count = 1
         self.unit, self.val_timing = interval[0], interval[1]
         self.val_dataloader = val_dataloader
         self.val_cfg = val_cfg
-        self.logger = logger
-   
-        
-    def after_train_iter(self, runner) -> None:           
+        self.logger = logger 
+    
+    def after_train_iter(self, runner) -> None:     
         if self.unit == 'iter' and\
             self.every_n_inner_iters(runner, self.val_timing):
             
@@ -54,7 +53,8 @@ class Validation_Hook(Hook):
 
         result = dict(epoch = runner.epoch, 
                       inner_iter = runner.inner_iter, 
-                      mAP = mAP,
+                      mAP = mAP["mAP"],
+                      dv_mAP = mAP["dv_mAP"],
                       **log_dict_loss)
     
         log_str = ""
@@ -93,7 +93,7 @@ class TensorBoard_Hook(Hook):
         self.unit, self.timing = interval[0], interval[1]
         self.pvc_dir = pvc_dir
         self.writer_result_dir = SummaryWriter(log_dir = out_dir)    
-    
+        
     def after_train_iter(self, runner) -> None: 
         if self.unit == 'iter' and\
             self.every_n_inner_iters(runner, self.timing):  
@@ -166,7 +166,7 @@ class TensorBoard_Hook(Hook):
 
 
 @HOOK.register_module()
-class Check_Hook(Hook):
+class Check_Hook(Hook):      
     def before_val_epoch(self, runner):
         """Check whether the dataset in val epoch is compatible with head.
 
@@ -187,6 +187,7 @@ class Check_Hook(Hook):
     def after_train_iter(self, runner) -> None: 
         self.check_memory_leakage(runner)
         self.check_memory_allocated(runner)
+  
         
     def _check_head(self, runner):
         """Check whether the `num_classes` in head matches the length of

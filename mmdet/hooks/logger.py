@@ -130,6 +130,7 @@ class LoggerHook(Hook):
                 GPU_total = memory['GPU']['total']
                 GPU_used = memory['GPU']['used']
                 GPU_percent = memory['GPU']['percent']
+                GPU_allocated_tensor = memory['GPU']['allocated_tensor']
                 
                 RAM_total = memory['RAM']['total']
                 RAM_used = memory['RAM']['used']

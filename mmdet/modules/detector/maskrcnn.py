@@ -18,8 +18,9 @@ class MaskRCNN(BaseModule):
         self.backbone = build_from_cfg(backbone, BACKBORN)   
         self.neck = build_from_cfg(neck, NECK)   
         self.rpn_head = build_from_cfg(rpn_head, RPN_HEAD)   
-        self.roi_head = build_from_cfg(roi_head, ROI_HEAD)   
         
+        self.roi_head = build_from_cfg(roi_head, ROI_HEAD)   
+            
         self.CLASSES = None
         self.rpn_proposal_cfg = rpn_head.train_cfg.get('rpn_proposal', None)
         
@@ -109,7 +110,7 @@ class MaskRCNN(BaseModule):
             len(gt_bboxe) = batch_size
                 gt_bboxe: [num_gts, 4] in [x_min, y_min, x_max, y_max]
         """
-
+        
         # img: [B=2, C=3, H=768, W=1344]
         x = self.backbone(img)
         # type(x): list,        len(x) == cfg.model.backbone.depths
@@ -144,18 +145,18 @@ class MaskRCNN(BaseModule):
                                                                 gt_bboxes_ignore=None,
                                                                 proposal_cfg=self.rpn_proposal_cfg,
                                                                 **kwargs)
-        
+       
         losses.update(rpn_losses)
-     
+        
         # roi_losses = self.roi_head.forward_train(x, img_metas, proposal_list,
         #                                          gt_bboxes, gt_labels, gt_masks,
         #                                          **kwargs)
         roi_losses = self.roi_head.forward_train(x, img_metas, proposal_list,
                                                  gt_bboxes, gt_labels, None, gt_masks,
                                                  **kwargs)
-        
-        losses.update(roi_losses)
 
+
+        losses.update(roi_losses)
       
         return losses 
     
@@ -180,6 +181,7 @@ class MaskRCNN(BaseModule):
         """bool: whether the detector has a mask head"""
         return ((hasattr(self, 'roi_head') and self.roi_head.with_mask)
                 or (hasattr(self, 'mask_head') and self.mask_head is not None))
+    
         
     def train_step(self, data, optimizer):  # TODO : optimizer 어따씀?
         """The iteration step during training.
@@ -215,12 +217,14 @@ class MaskRCNN(BaseModule):
     
         
         # run `forward()` that all modules have 
+
         losses = self(**data)  
+  
+       
                 
         loss, log_vars = self._parse_losses(losses)
         
         outputs = dict(loss=loss, log_vars=log_vars, num_samples=len(data['img_metas']))
-
         return outputs
     
     

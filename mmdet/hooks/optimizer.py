@@ -1,4 +1,5 @@
 import logging
+import torch
 from torch.nn.utils import clip_grad
 
 from hibernation_no1.mmdet.hooks.hook import Hook, HOOK
@@ -32,7 +33,7 @@ class OptimizerHook(Hook):
         if len(params) > 0:
             return clip_grad.clip_grad_norm_(params, **self.grad_clip)
         
-        
+            
     def after_train_iter(self, runner):
         """
             execute optimizer
@@ -43,21 +44,18 @@ class OptimizerHook(Hook):
             self.detect_anomalous_parameters(runner.outputs['loss'], runner)
             
         # Computes the gradient of current tensor 
-        runner.outputs['loss'].backward()
-        
+        runner.outputs['loss'].backward()      
+       
         if self.grad_clip is not None:
             grad_norm = self.clip_grads(runner.model.parameters())
             if grad_norm is not None:
                 # Add grad norm to the logger
                 runner.log_buffer.update({'grad_norm': float(grad_norm)},
-                                         runner.outputs['num_samples'])
-                
+                                         runner.outputs['num_samples']) 
         # optimize (back propagation)
-        runner.optimizer.step()    
-        
-    
-        
-        
+        runner.optimizer.step() 
+           
+                
     def detect_anomalous_parameters(self, loss, runner):
         """
             find parameter of model which not using training
