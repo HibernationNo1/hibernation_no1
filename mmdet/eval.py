@@ -32,7 +32,7 @@ def get_divided_polygon(polygon, window_num):
     """
         divide polygon by the number of `window_num` piece by sort in x and y direction
     Args:
-        polygon (list): 
+        polygon (list): [[x_1, y_1], [x_2, y_2], ....]
         window_num (int): 
     
     Return 
@@ -43,10 +43,11 @@ def get_divided_polygon(polygon, window_num):
     if isinstance(polygon, np.ndarray): polygon = polygon.tolist()
   
     piece_point = int(len(polygon)/window_num)
+  
     polygon_xsort = polygon.copy()
-    polygon_xsort.sort(key=lambda x: x[0])
+    polygon_xsort.sort(key=lambda x: x[0])      # sort points by x coordinates
     polygon_ysort = polygon.copy()
-    polygon_ysort.sort(key=lambda x: x[1])
+    polygon_ysort.sort(key=lambda x: x[1])      # sort points by y coordinates
     
     
     xsort_div_pol = divide_polygon(polygon_xsort, window_num, piece_point)
@@ -54,7 +55,7 @@ def get_divided_polygon(polygon, window_num):
 
     x_lt_rb_list, y_lt_rb_list = [], []
     for x_pol, y_pol in zip(xsort_div_pol, ysort_div_pol):
-        x_lt_rb_list.append(get_box_from_pol(x_pol))
+        x_lt_rb_list.append(get_box_from_pol(x_pol))        
         y_lt_rb_list.append(get_box_from_pol(y_pol))
     
     
@@ -66,7 +67,7 @@ def divide_polygon(polygon_sorted, window_num, piece_point):
     """divide polygon by the number of `window_num` piece
 
     Args:
-        polygon_sorted (list): 
+        polygon_sorted (list): polygon point
         window_num (int): 
         piece_point (int): 
 
@@ -87,6 +88,9 @@ def divide_polygon(polygon_sorted, window_num, piece_point):
     
 
 def get_box_from_pol(polygon):
+    """
+        compute each left_top, right_bottom point of bbox
+    """
     x_min, y_min, x_max, y_max = 100000, 100000, -1, -1
     
     for point in polygon:
@@ -120,7 +124,6 @@ class Evaluate():
         self.set_treshold()
         
         self.get_precision_recall_value()
-        self.precision_recall_dict = self.confusion_matrix
    
     
     def set_treshold(self):
@@ -128,44 +131,60 @@ class Evaluate():
         thrshd_value = (self.cfg.iou_thrs[-1] - self.cfg.iou_thrs[0]) / num_thrshd_divi
         self.iou_threshold = [round(self.cfg.iou_thrs[0] + (thrshd_value*i), 2) for i in range(num_thrshd_divi+1)]
     
-    def compute_F1_score(self):
-        F1_score_dict = dict()
-        for class_name, threshold_list in self.precision_recall_dict.items():
-            print(f"\nclass_name : {class_name}")
-            F1_score_dict[class_name] = []
-            for idx, threshold in enumerate(threshold_list):
-                F1_score_dict[class_name].append(threshold['F1_score'])
+    def compute_F1_score(self, threshold_idx = 7):
+        """
+            threshold_idx: index threshold list
+                ex) threshold list = [0.3, 0.4, 0.5, 0.6, 0.7], and threshold_idx = 3
+                    0.6 = self.cfg.iou_thrs[3]         
+            
+            return:
+                F1_score['F1_score'] have each class_names key
+                F1_score['F1_score']['some_class_name'] : F1_score value
+                F1_score['dv_F1_score'] is same
+        """
+        assert len(self.cfg.iou_thrs) > threshold_idx
         
-        return F1_score_dict
+        F1_score = dict(F1_score = dict(),
+                        dv_F1_score = dict())
+        for class_name, threshold_list in self.precision_recall_dict.items():
+            F1_score['F1_score'][class_name] = threshold_list[threshold_idx]['F1_score']
+            F1_score['dv_F1_score'][class_name] = threshold_list[threshold_idx]['dv_F1_score']
+            
+        return F1_score
             
     
     def compute_mAP(self):  
-        classes_AP = self.compute_PR_area()
-        
-        sum_AP = 0
-        for class_name, AP in classes_AP.items():
-            assert AP <=1.0
-            sum_AP +=AP
-        mAP = sum_AP/len(self.model.CLASSES)
-        
-        return round(mAP, 4) 
+        AP = self.compute_PR_area()     
+        mAP_dict = dict()
+        for key, class_ap in AP.items():
+            sum_AP = 0
+            for class_name, AP in class_ap.items():    
+                assert AP <=1.0
+                sum_AP +=AP
+            mAP = sum_AP/len(self.model.CLASSES)
+            if key == 'classes_AP': mAP_dict['mAP'] = round(mAP, 4) 
+            elif key == 'classes_dv_AP': mAP_dict['dv_mAP'] = round(mAP, 4) 
+            
+        return mAP_dict
       
     def compute_PR_area(self):
-        classes_AP = dict()
+        AP = dict(classes_AP = dict(),
+                  classes_dv_AP = dict())
         for class_name, threshold_list in self.precision_recall_dict.items():
-            prcs_rcl_list = []
+            PR_list, dv_PR_list = [], []
             for idx, threshold in enumerate(threshold_list):
-                prcs_rcl_list.append([threshold['precision'], threshold['recall']])
-            prcs_rcl_list.reverse()
-            
+                PR_list.append([threshold['precision'], threshold['recall']])
+                dv_PR_list.append([threshold['dv_precision'], threshold['dv_recall']])
+            PR_list.sort(key = lambda x : x[1])     # Sort by recall
+            dv_PR_list.reverse()  
+                
+            # adjust sum of recall
             before_recall = sum_recall = 0
-            for idx, prcs_rcl in enumerate(prcs_rcl_list):
-                _, recall = prcs_rcl
+            for idx, precision_recall in enumerate(dv_PR_list):
+                _, recall = precision_recall
                 sum_recall +=abs(recall - before_recall)
                 before_recall = recall
                 
-            
-            # for adjust sum of recall
             adjust_value = 1
             if sum_recall > 1:
                 # ideally, the values of recall are sorted in ascending order
@@ -175,54 +194,86 @@ class Evaluate():
                 # to adjust this `sum_recall`, we need `adjust_value`
                 adjust_value  = 1/sum_recall  
             
-            ap_area = 0
-            before_recall =0
-            continue_count = -1
-            for idx, prcs_rcl in enumerate(prcs_rcl_list):
-                if continue_count > 0: 
-                    continue_count -=1 
-                    if continue_count == 0 : continue_count = -1
-                    continue
-                precision, recall = prcs_rcl
-                
-                if idx+1 < len(prcs_rcl_list) and prcs_rcl_list[idx+1][1] == recall:
-                    tmp_precision_list = []
-                    for i in range(idx, len(prcs_rcl_list)):
-                        if recall == prcs_rcl_list[i][1]:       # same recall
-                            continue_count +=1
-                            tmp_precision_list.append(prcs_rcl_list[i][0])
-                        else: break
-                    precision = max([precis for precis in tmp_precision_list])
-                
-                # print(f"before_recall : {before_recall:.2f}, recall : {recall:.2f}    {abs(before_recall - recall):.2f}
-                # precision: {precision:.2f}     area = {abs(before_recall - recall)*precision:.2f}")
-                area = abs(before_recall - recall)*adjust_value*precision
-                ap_area += area
             
-                
-                before_recall = recall
+            def compute_PR_area_(PR_list, adjust_value = 1):
+                ap_area = 0
+                before_recall =0
+                continue_count = -1
+                for idx, precision_recall in enumerate(PR_list):
+                    if continue_count > 0: 
+                        continue_count -=1 
+                        if continue_count == 0 : continue_count = -1
+                        continue
+                    precision, recall = precision_recall
                     
-            classes_AP[class_name] = round(ap_area, 4)
-        return classes_AP
+                    # TODO: 계산법 다시
+                    # idx+1 < len(PR_list) : if not last 
+                    # PR_list[idx+1][1] == recall : if recall eqaul value as next recall
+                    if idx+1 < len(PR_list) and PR_list[idx+1][1] == recall:
+                        tmp_precision_list = []
+                        # searching all next PR_list values 
+                        # and only the precision when the recall is the same value is selected.
+                        for i in range(idx, len(PR_list)):
+                            if recall == PR_list[i][1]:       # same recall
+                                continue_count +=1
+                                tmp_precision_list.append(PR_list[i][0])
+                            else: break
+                        # get the largest value among selected precisions
+                        precision = max([precis for precis in tmp_precision_list])
+                    
+                    # print(f"before_recall : {before_recall:.2f}, recall : {recall:.2f}    {abs(before_recall - recall):.2f}
+                    # precision: {precision:.2f}     area = {abs(before_recall - recall)*precision:.2f}")
+                    area = abs(recall - before_recall)*precision
+                    if adjust_value != 1:
+                        area = area*adjust_value
+                    ap_area += area
+                    before_recall = recall
+                
+                return ap_area
+            
+            dv_ap_area = compute_PR_area_(dv_PR_list, adjust_value)
+            ap_area = compute_PR_area_(PR_list,)
+            
+            # print(f"{class_name}, dv_ap_area : {dv_ap_area}")
+            # print(f"{class_name}, ap_area : {ap_area}")
+            AP['classes_dv_AP'][class_name] = round(dv_ap_area, 4)
+            AP['classes_AP'][class_name] = round(ap_area, 4)
+        return AP
+   
     
     def compute_precision_recall(self):
-        for class_name, threshold_list in self.confusion_matrix.items():
-            for idx, threshold in enumerate(threshold_list):
-                if threshold['num_pred'] == 0: precision = 0
-                else: precision = threshold['num_true']/threshold['num_pred']
-                
-                if threshold['num_gt'] == 0:    # class: `class_nema` is not exist in dataset
-                    pre_recall = recall = 0
-                else:  
-                    pre_recall = threshold['num_iou']/threshold['num_gt']
-                    recall = threshold['num_true']/threshold['num_gt']
+        self.precision_recall_dict = self.confusion_matrix.copy()       # for contain recall, precision, F1_score
     
-                self.confusion_matrix[class_name][idx]['pre_recall'] = pre_recall
-                self.confusion_matrix[class_name][idx]['recall'] = recall
-                self.confusion_matrix[class_name][idx]['precision'] = precision
-            
-                if recall == 0 and precision == 0: self.confusion_matrix[class_name][idx]['F1_score'] =0
-                else: self.confusion_matrix[class_name][idx]['F1_score'] = 2*(precision*recall)/(precision+recall)
+        for class_name, threshold_list in self.confusion_matrix.items():
+            for trsh_idx, threshold in enumerate(threshold_list):
+                
+                # compute recall
+                if threshold['num_gt'] == 0:    # class: `class_nema` is not exist in dataset
+                    recall = dv_recall = 0
+                else:  
+                    recall = threshold['num_true']/threshold['num_gt']
+                    dv_recall = threshold['num_dv_true']/threshold['num_gt']
+                 
+                # compute precision
+                if threshold['num_pred'] == 0: 
+                    precision = dv_precision = 0
+                else: 
+                    if threshold['num_dv_pred'] == 0:   dv_precision = 0
+                    else:   dv_precision = threshold['num_dv_true']/threshold['num_dv_pred']
+                    precision = threshold['num_true']/threshold['num_pred']
+                
+                self.precision_recall_dict[class_name][trsh_idx]['recall'] = recall
+                self.precision_recall_dict[class_name][trsh_idx]['precision'] = precision
+                # compute F1_score with not divided polygons
+                if recall == 0 and precision == 0: self.precision_recall_dict[class_name][trsh_idx]['F1_score'] =0
+                else: self.precision_recall_dict[class_name][trsh_idx]['F1_score'] = 2*(precision*dv_recall)/(precision+dv_recall)
+                
+                
+                self.precision_recall_dict[class_name][trsh_idx]['dv_recall'] = dv_recall
+                self.precision_recall_dict[class_name][trsh_idx]['dv_precision'] = dv_precision
+                # compute F1_score with divided polygons
+                if dv_recall == 0 and dv_precision == 0: self.precision_recall_dict[class_name][trsh_idx]['dv_F1_score'] =0
+                else: self.precision_recall_dict[class_name][trsh_idx]['dv_F1_score'] = 2*(dv_precision*dv_recall)/(dv_precision+dv_recall)
         
 
     def get_precision_recall_value(self):
@@ -230,10 +281,11 @@ class Evaluate():
             self.confusion_matrix[class_name] = []
             for i in range(len(self.iou_threshold)):
                 self.confusion_matrix[class_name].append(dict(iou_threshold = self.iou_threshold[i],
-                                                num_gt = 0, 
-                                                num_pred = 0, 
-                                                num_true = 0,
-                                                num_iou = 0)
+                                                num_gt = 0,         # number of ground truth object
+                                                num_dv_pred = 0,    # number of predicted objects by divided polygons
+                                                num_dv_true = 0,    # successfully predicted objects among predicted objects by divided polygons,
+                                                num_pred = 0,       # number of predicted objects 
+                                                num_true = 0)       # successfully predicted objects among predicted objects
                                             )
         
         for i, val_data_batch in enumerate(self.dataloader):
@@ -305,16 +357,19 @@ class Evaluate():
                         labels = gt_labels)
             
             
-            self.get_num_posi_nega(gt_dict, infer_dict)  
+            self.get_num_pred_truth(gt_dict, infer_dict)  
     
     
     
-    def get_num_posi_nega(self, gt_dict, infer_dict):
-        num_pred = len(infer_dict['bboxes'])                    
+    def get_num_pred_truth(self, gt_dict, infer_dict, window_num = 3):
+        """
+            count of 'predicted object' and 'truth predicted object'
+        """
+        num_predicted_object = len(infer_dict['bboxes'])                    
         num_gt = len(gt_dict['bboxes'])
         for idx, threshold in enumerate(self.iou_threshold):        
             done_gt = []        
-            for i in range(num_pred):
+            for i in range(num_predicted_object):
                 pred_class_name = self.classes[infer_dict['labels'][i]]
                 for j in range(num_gt):
                     gt_class_name = self.classes[gt_dict['labels'][j]]
@@ -324,18 +379,21 @@ class Evaluate():
                                     
                     if j in done_gt: continue
                     
+                    # compute intersection over union
                     i_bboxes, gt_bboxes = infer_dict['bboxes'][i], gt_dict['bboxes'][j]
                     iou = compute_iou(i_bboxes, gt_bboxes)
                     
+                    
                     if (iou > threshold and          
                         infer_dict['score'][i] > self.cfg.confidence_thrs):
+                        self.confusion_matrix[pred_class_name][idx]['num_pred'] +=1
                         if pred_class_name == gt_class_name:  
-                            self.confusion_matrix[pred_class_name][idx]['num_iou'] +=1
+                            self.confusion_matrix[pred_class_name][idx]['num_true'] +=1
                         
                         # compute iou by sliced polygon 
                         i_polygons, gt_polygons = infer_dict['polygons'][i], gt_dict['polygons'][j]
-                        i_xsort_bbox_list, i_ysort_bbox_list = get_divided_polygon(i_polygons, 3)
-                        gt_xsort_bbox_list, gt_ysort_bbox_list = get_divided_polygon(gt_polygons, 3)
+                        gt_xsort_bbox_list, gt_ysort_bbox_list = get_divided_polygon(gt_polygons, window_num)
+                        i_xsort_bbox_list, i_ysort_bbox_list = get_divided_polygon(i_polygons, window_num)
                     
                         for i_xsort_bbox, gt_xsort_bbox in zip(i_xsort_bbox_list, gt_xsort_bbox_list):
                             if compute_iou(i_xsort_bbox, gt_xsort_bbox) < threshold:  continue
@@ -343,10 +401,15 @@ class Evaluate():
                             if compute_iou(i_ysort_bbox, gt_ysort_bbox) < threshold:  continue
                         
                         # for calculate recall by divided_polygon
-                        self.confusion_matrix[pred_class_name][idx]['num_pred'] +=1
+                        # number of predicted objects
+                        self.confusion_matrix[pred_class_name][idx]['num_dv_pred'] +=1
                         
                         if pred_class_name == gt_class_name: 
-                            self.confusion_matrix[pred_class_name][idx]['num_true'] +=1
+                            # successfully predicted objects among predicted objects
+                            self.confusion_matrix[pred_class_name][idx]['num_dv_true'] +=1
                         
                         done_gt.append(j)
+                            
+        
+                        
  
