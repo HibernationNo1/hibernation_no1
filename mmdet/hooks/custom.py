@@ -10,19 +10,25 @@ from torch.utils.tensorboard import SummaryWriter
 class Validation_Hook(Hook):
     def __init__(self,
                  val_dataloader: DataLoader,
-                 logger, 
+                 result_dir = None,
+                 logger = None,
                  interval = ['iter', 50],
                  val_cfg = None
                 ):
         self.iter_count = 1
+        self.result_dir = result_dir
         self.unit, self.val_timing = interval[0], interval[1]
         self.val_dataloader = val_dataloader
         self.val_cfg = val_cfg
         self.logger = logger 
+
+    def every_n_inner_iters(self):
+        return (self.iter_count) % self.val_timing == 0 if self.val_timing > 0 else False
     
     def after_train_iter(self, runner) -> None:     
+        self.iter_count +=1
         if self.unit == 'iter' and\
-            self.every_n_inner_iters(runner, self.val_timing):
+            self.every_n_inner_iters():
             
             result = self.validation(runner)
             runner.val_result.append(result)
@@ -69,7 +75,7 @@ class Validation_Hook(Hook):
             if type(item) == float:
                 item = round(item, 4)
             log_str +=f"{key}: {item},     "
-            if key == "mAP":
+            if key == "dv_mAP":
                 log_str +=f"\n>>   "
                     
         log_str +=f"\n>>   "
