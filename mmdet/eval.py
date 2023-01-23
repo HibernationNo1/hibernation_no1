@@ -1,8 +1,10 @@
 import numpy as np
+import cv2
+import warnings
 from hibernation_no1.mmdet.inference import inference_detector, parse_inferece_result
 from hibernation_no1.mmdet.visualization import mask_to_polygon
 
-def compute_iou(infer_box, gt_box):
+def compute_iou(infer_box, gt_box, confidence_score):
     """
     infer_box : x_min, y_min, x_max, y_max
     gt_box : x_min, y_min, x_max, y_max
@@ -24,11 +26,11 @@ def compute_iou(infer_box, gt_box):
     outer = (box1_area + box2_area - inter)
     if outer == 0:
         return 1.0
-    iou = inter / outer
+    iou = inter / outer * confidence_score
     return iou
 
 
-def get_divided_polygon(polygon, window_num):
+def get_divided_polygon(polygon, window_num, min_num_points = 10):
     """
         divide polygon by the number of `window_num` piece by sort in x and y direction
     Args:
@@ -41,7 +43,12 @@ def get_divided_polygon(polygon, window_num):
             x_lt_rb_list[0]: [x_min, y_min, x_max, y_max]
     """
     if isinstance(polygon, np.ndarray): polygon = polygon.tolist()
-  
+
+    # return None if number of points of polygon less than `min_num_points` 
+    if len(polygon) < min_num_points: return None    
+    # return None if (number of points of polygon//window_num) less than `min_num_points`   
+    if len(polygon) // window_num < min_num_points : return None
+    
     piece_point = int(len(polygon)/window_num)
   
     polygon_xsort = polygon.copy()
@@ -142,7 +149,7 @@ class Evaluate():
                 F1_score['F1_score']['some_class_name'] : F1_score value
                 F1_score['dv_F1_score'] is same
         """
-        assert len(self.cfg.iou_thrs) > threshold_idx
+        assert len(self.iou_threshold) > threshold_idx
         
         F1_score = dict(F1_score = dict(),
                         dv_F1_score = dict())
@@ -152,14 +159,15 @@ class Evaluate():
             
         return F1_score
             
-    
+
     def compute_mAP(self):  
         AP = self.compute_PR_area()     
         mAP_dict = dict()
         for key, class_ap in AP.items():
             sum_AP = 0
             for class_name, AP in class_ap.items():    
-                assert AP <=1.0
+                if AP >1.0: 
+                    raise ValueError(f"key: {key}, class_name: {class_name}, AP: {AP}") 
                 sum_AP +=AP
             mAP = sum_AP/len(self.model.CLASSES)
             if key == 'classes_AP': mAP_dict['mAP'] = round(mAP, 4) 
@@ -173,15 +181,16 @@ class Evaluate():
         for class_name, threshold_list in self.precision_recall_dict.items():
             PR_list, dv_PR_list = [], []
             for idx, threshold in enumerate(threshold_list):
-                PR_list.append([threshold['precision'], threshold['recall']])
-                dv_PR_list.append([threshold['dv_precision'], threshold['dv_recall']])
-            PR_list.sort(key = lambda x : x[1])     # Sort by recall
-            dv_PR_list.reverse()  
-                
+                PR_list.append([threshold['precision'], threshold['recall'], threshold['threshold']])
+                dv_PR_list.append([threshold['dv_precision'], threshold['dv_recall'], threshold['threshold']])
+
+            PR_list.sort(key = lambda x : x[2])     # Sort by threshold
+            dv_PR_list.sort(key = lambda x : x[2])  # dv_PR_list.reverse()  
+ 
             # adjust sum of recall
             before_recall = sum_recall = 0
             for idx, precision_recall in enumerate(dv_PR_list):
-                _, recall = precision_recall
+                _, recall, _ = precision_recall
                 sum_recall +=abs(recall - before_recall)
                 before_recall = recall
                 
@@ -189,64 +198,129 @@ class Evaluate():
             if sum_recall > 1:
                 # ideally, the values of recall are sorted in ascending order
                 # but there are cases where the value rises and then falls.
-                #   (by compute iou by divied polygons)
+                #   (by compute iou by divied polygons)'recall
                 # In this case, `sum_recall` exceed 1 sometimes.
                 # to adjust this `sum_recall`, we need `adjust_value`
                 adjust_value  = 1/sum_recall  
             
             
-            def compute_PR_area_(PR_list, adjust_value = 1):
+            def compute_PR_area_(input_PR_list, adjust_value = 1):
                 ap_area = 0
-                before_recall =0
-                continue_count = -1
-                for idx, precision_recall in enumerate(PR_list):
-                    if continue_count > 0: 
-                        continue_count -=1 
-                        if continue_count == 0 : continue_count = -1
+                before_recall, before_precision = 0, 1
+
+                for idx, precision_recall in enumerate(input_PR_list):
+                    precision, recall, threshold = precision_recall
+                    if idx == 0:
+                        area = (precision*recall)
+                        if adjust_value != 1:
+                            area = area*adjust_value
+                        ap_area +=area
+                        before_recall, before_precision = recall, precision
                         continue
-                    precision, recall = precision_recall
                     
-                    # TODO: 계산법 다시
-                    # idx+1 < len(PR_list) : if not last 
-                    # PR_list[idx+1][1] == recall : if recall eqaul value as next recall
-                    if idx+1 < len(PR_list) and PR_list[idx+1][1] == recall:
-                        tmp_precision_list = []
-                        # searching all next PR_list values 
-                        # and only the precision when the recall is the same value is selected.
-                        for i in range(idx, len(PR_list)):
-                            if recall == PR_list[i][1]:       # same recall
-                                continue_count +=1
-                                tmp_precision_list.append(PR_list[i][0])
-                            else: break
-                        # get the largest value among selected precisions
-                        precision = max([precis for precis in tmp_precision_list])
+                    # precision-recall curve is drawn from the right (high recall side)
+                    # Because of this, before_recall have more large value
+                    if before_recall < recall: 
+                        raise ValueError("recall value should increases, but decreases\n"
+                                         f"before_recall : {before_recall}, recall : {recall}")
+                     
+
+                    # if recall remains the same and only precision increases
+                    if before_recall == recall :
+                        if before_precision > precision:
+                            # subtract previous value and add the current value
+                            area = ((precision*recall) - (before_precision*before_recall))
+                            if adjust_value != 1:
+                                area = area*adjust_value
+                            ap_area +=area
+                            before_recall, before_precision = recall, precision
+                            continue
+                        else:
+                            before_recall, before_precision = recall, precision
+                            continue
                     
-                    # print(f"before_recall : {before_recall:.2f}, recall : {recall:.2f}    {abs(before_recall - recall):.2f}
-                    # precision: {precision:.2f}     area = {abs(before_recall - recall)*precision:.2f}")
-                    area = abs(recall - before_recall)*precision
+                    
+
+                    recall_dif = before_recall - recall
+                    if before_precision < precision:        # increases precision
+                        precision_dif = precision - before_precision
+                        current_ap = (recall_dif * precision) - (precision_dif*recall_dif/2)
+                        area = current_ap
+                    elif before_precision == precision:     # precision remains the same
+                        area = (precision *recall_dif)
+                    elif before_precision > precision:      # decreases precision
+                        precision_dif = precision - before_precision
+                        current_ap = (recall_dif * precision) + (precision_dif*recall_dif/2)
+                        area = current_ap
+                    before_recall, before_precision = recall, precision
                     if adjust_value != 1:
                         area = area*adjust_value
                     ap_area += area
-                    before_recall = recall
                 
                 return ap_area
             
+            ap_area = compute_PR_area_(PR_list)
+       
             dv_ap_area = compute_PR_area_(dv_PR_list, adjust_value)
-            ap_area = compute_PR_area_(PR_list,)
             
-            # print(f"{class_name}, dv_ap_area : {dv_ap_area}")
-            # print(f"{class_name}, ap_area : {ap_area}")
+            
+            ####----
+            # max_pre, max_recall = -1, -1
+            # for PR in PR_list:
+            #     precision, recall, _ = PR
+            #     if max_pre < precision:
+            #         max_pre = precision
+            #     if max_recall < recall:
+            #         max_recall = recall
+            
+            # if max_recall !=0:
+            #     print(f"\nclass_name ; {class_name}")
+            #     import matplotlib.pyplot as plt
+            #     precision_list, recall_list = [1], [0]
+            #     fig, ax = plt.subplots(figsize = (10, 5))
+            #     for PR in PR_list:
+            #         precision, recall, _ = PR
+            #         precision_list.append(precision)
+            #         recall_list.append(recall)
+                
+            #     ax.plot(recall_list, precision_list)
+            #     fig.tight_layout(pad = 3)
+            #     ax.set_title(f'PR, {class_name}, ap_area : {ap_area:.4f}', fontsize = 20)
+
+                
+            #     precision_list, recall_list = [0], [1]
+            #     fig_dv, ax_dv = plt.subplots(figsize = (10, 5))
+            #     for dv_PR in dv_PR_list:
+            #         precision, recall, _ = dv_PR
+            #         precision_list.append(precision)
+            #         recall_list.append(recall)
+                
+            #     ax_dv.plot(recall_list, precision_list)
+            #     fig_dv.tight_layout(pad = 3)
+            #     ax_dv.set_title(f'dv_PR, {class_name}, dv_ap_area : {dv_ap_area:.4f}', fontsize = 20)
+            #     plt.savefig( + '/filename.png')
+                
+            # AP[class_name]["classes_dv_AP"] = round(dv_ap_area, 4)
+            # AP[class_name]["classes_AP"] = round(ap_area, 4)
+            # AP[class_name]["PR_list"] = PR_list
+            # AP[class_name]["dv_PR_list"] = dv_PR_list       
+            #### -----
+
+            
+
             AP['classes_dv_AP'][class_name] = round(dv_ap_area, 4)
             AP['classes_AP'][class_name] = round(ap_area, 4)
+
+           
         return AP
    
     
     def compute_precision_recall(self):
         self.precision_recall_dict = self.confusion_matrix.copy()       # for contain recall, precision, F1_score
-    
+
         for class_name, threshold_list in self.confusion_matrix.items():
             for trsh_idx, threshold in enumerate(threshold_list):
-                
+                self.precision_recall_dict[class_name][trsh_idx]['threshold'] = threshold['iou_threshold']
                 # compute recall
                 if threshold['num_gt'] == 0:    # class: `class_nema` is not exist in dataset
                     recall = dv_recall = 0
@@ -260,8 +334,8 @@ class Evaluate():
                 else: 
                     if threshold['num_dv_pred'] == 0:   dv_precision = 0
                     else:   dv_precision = threshold['num_dv_true']/threshold['num_dv_pred']
-                    precision = threshold['num_true']/threshold['num_pred']
-                
+                    precision = threshold['num_true']/threshold['num_pred']                
+
                 self.precision_recall_dict[class_name][trsh_idx]['recall'] = recall
                 self.precision_recall_dict[class_name][trsh_idx]['precision'] = precision
                 # compute F1_score with not divided polygons
@@ -291,23 +365,25 @@ class Evaluate():
         for i, val_data_batch in enumerate(self.dataloader):
             gt_bboxes_list = val_data_batch['gt_bboxes'].data
             gt_labels_list = val_data_batch['gt_labels'].data
-            img_list = val_data_batch['img'].data
+            img_list = val_data_batch['img'].data       # img_list[0].shape : torch.Size([bach_size, 3, height, width])
             gt_masks_list = val_data_batch['gt_masks'].data
             assert len(gt_bboxes_list) == 1 and (len(gt_bboxes_list) ==
                                                     len(gt_labels_list) ==
                                                     len(img_list) == 
                                                     len(gt_masks_list))
-            # len: batch_size
+            # len(batch_gt_bboxes): batch_size
             batch_gt_bboxes = gt_bboxes_list[0]           
             batch_gt_labels = gt_labels_list[0]  
             batch_gt_masks = gt_masks_list[0]    
             
+
             img_metas = val_data_batch['img_metas'].data[0]
             batch_images_path = []    
             for img_meta in img_metas:
                 batch_images_path.append(img_meta['filename'])
+       
             batch_results = inference_detector(self.model, batch_images_path, self.cfg.batch_size)
-                        
+                         
             assert (len(batch_gt_bboxes) == 
                         len(batch_gt_labels) ==
                         len(batch_images_path) ==
@@ -315,20 +391,20 @@ class Evaluate():
                         len(batch_results))
             batch_conf_list = [batch_gt_masks, batch_gt_bboxes, batch_gt_labels, batch_results]
             
-            self.get_confusion_value(batch_conf_list)
+            self.get_confusion_value(batch_conf_list, batch_images_path)
                                         
         self.compute_precision_recall()
     
     
-    def get_confusion_value(self, batch_conf_list):
+    def get_confusion_value(self, batch_conf_list, batch_images_path = None):
         batch_gt_masks, batch_gt_bboxes, batch_gt_labels, batch_results = batch_conf_list
         
-        for gt_mask, gt_bboxes, gt_labels, result in zip(
-            batch_gt_masks, batch_gt_bboxes, batch_gt_labels, batch_results
-            ):
+        for i, (gt_mask, gt_bboxes, gt_labels, result) in enumerate(
+                zip(batch_gt_masks, batch_gt_bboxes, batch_gt_labels, batch_results)
+                ):
             
             i_bboxes, i_labels, i_mask = parse_inferece_result(result)
-
+          
             if i_mask is not None:
                 if self.iou_threshold[0] > 0:
                     assert i_bboxes is not None and i_bboxes.shape[1] == 5
@@ -356,60 +432,116 @@ class Evaluate():
                         polygons = gt_polygons,
                         labels = gt_labels)
             
-            
-            self.get_num_pred_truth(gt_dict, infer_dict)  
+            img = cv2.imread(batch_images_path[i])
+            self.get_num_pred_truth(gt_dict, infer_dict, num_window = self.cfg.num_window, img = img)  
     
     
     
-    def get_num_pred_truth(self, gt_dict, infer_dict, window_num = 3):
+    def get_num_pred_truth(self, gt_dict, infer_dict, num_window = 3, img = None):
         """
             count of 'predicted object' and 'truth predicted object'
         """
-        num_predicted_object = len(infer_dict['bboxes'])                    
-        num_gt = len(gt_dict['bboxes'])
-        for idx, threshold in enumerate(self.iou_threshold):        
-            done_gt = []        
-            for i in range(num_predicted_object):
-                pred_class_name = self.classes[infer_dict['labels'][i]]
-                for j in range(num_gt):
-                    gt_class_name = self.classes[gt_dict['labels'][j]]
+
+        inf_bboxes = infer_dict['bboxes']                 
+        gt_bboxes = gt_dict['bboxes']
+
+        for gt_i, gt_bbox in enumerate(gt_bboxes):
+            gt_object_name = self.classes[gt_dict['labels'][gt_i]]
+            for inf_i, inf_bbox in enumerate(inf_bboxes):
+                inf_object_name = self.classes[infer_dict['labels'][inf_i]]
+                confidence_score = infer_dict['score'][inf_i]
+
+                iou = compute_iou(gt_bbox, inf_bbox, confidence_score) 
+
+                for iou_i, iou_threshold in enumerate(self.iou_threshold):
                     
-                    # number of gt of each threshold by class_name
-                    if i == 0: self.confusion_matrix[gt_class_name][idx]['num_gt'] +=1 
-                                    
-                    if j in done_gt: continue
+                    # count number of ground truth object of each iou threshold
+                    if inf_i == 0:      
+                        self.confusion_matrix[gt_object_name][iou_i]['num_gt'] +=1 
+
+                    # should be upper than iou threshold
+                    if iou < iou_threshold: continue  
+
+                    # count number of predicted object of each iou threshold
+                    # regardless of object name.
+                    self.confusion_matrix[inf_object_name][iou_i]['num_pred'] +=1
+
+                    # count number of predicted object of each iou threshold
+                    # regard of object name.
+                    if inf_object_name == gt_object_name:
+                        # successfully predicted objects among predicted objects
+                        self.confusion_matrix[inf_object_name][iou_i]['num_true'] +=1
+
+                    # compute iou by sliced polygon 
+                    # polygons : [[x_1, y_1], [x_2, y_2], ..., [x_n, y_n]]
+                    inf_polygons, gt_polygons = infer_dict['polygons'][inf_i], gt_dict['polygons'][gt_i]
+                   
+                    gt_dv_bbox_list = get_divided_polygon(gt_polygons, num_window)
+                    inf_dv_bbox_list = get_divided_polygon(inf_polygons, num_window)
+                    if gt_dv_bbox_list is None or inf_dv_bbox_list is None:
+                        continue    # cannot be divided polygon cause the number of points is too small.
+
+               
+                    # print(f"iou ; {iou}")
+                    # print(f"confidence score : {infer_dict['score'][inf_i]}")
+                    # print(f"inf_object_name ; {inf_object_name}, gt_object_name ; {gt_object_name}")
+                    # gt_bbox_r = [int(i) for i in gt_bbox]
+                    # cv2.rectangle(img, (gt_bbox_r[0], gt_bbox_r[1]), (gt_bbox_r[2], gt_bbox_r[3]), color = (255, 255, 0), thickness = 1)
+                    # i_bbox_r = [int(i) for i in inf_bbox]
+                    # cv2.rectangle(img, (i_bbox_r[0], i_bbox_r[1]), (i_bbox_r[2], i_bbox_r[3]), color = (0, 255, 255), thickness = 1)
+
+                    # cv2.imshow("img", img)
+                    # while True:
+                    #     if cv2.waitKey() == 27: break
+
+                    # gt_xsort_bbox_list, gt_ysort_bbox_list = gt_dv_bbox_list
+                    # inf_xsort_bbox_list, inf_ysort_bbox_list = inf_dv_bbox_list
+
+                    # for i_i, (i_xsort_bbox, gt_xsort_bbox) in enumerate(zip(inf_xsort_bbox_list, gt_xsort_bbox_list)):
+                    #     dv_iou = compute_iou(i_xsort_bbox, gt_xsort_bbox)
+                    #     print(f"x_sort {i_i}, dv_iou_x : {dv_iou}")
+                    #     cv2.rectangle(img, (i_xsort_bbox[0], i_xsort_bbox[1]), (i_xsort_bbox[2], i_xsort_bbox[3]), color = (150, 255, 255), thickness = 1)
+                    #     cv2.rectangle(img, (gt_xsort_bbox[0], gt_xsort_bbox[1]), (gt_xsort_bbox[2], gt_xsort_bbox[3]), color = (255, 255, 150), thickness = 1)
+
+                    # cv2.imshow("img", img)
+                    # while True:
+                    #     if cv2.waitKey() == 27: break
+
+                    # for i_i, (i_ysort_bbox, gt_ysort_bbox) in enumerate(zip(inf_ysort_bbox_list, gt_ysort_bbox_list)):
+                    #     dv_iou = compute_iou(i_ysort_bbox, gt_ysort_bbox)
+                    #     print(f"y_sort {i_i}, dv_iou_y : {dv_iou}")
+                    #     cv2.rectangle(img, (i_ysort_bbox[0], i_ysort_bbox[1]), (i_ysort_bbox[2], i_ysort_bbox[3]), color = (75, 255, 255), thickness = 1)
+                    #     cv2.rectangle(img, (gt_ysort_bbox[0], gt_ysort_bbox[1]), (gt_ysort_bbox[2], gt_ysort_bbox[3]), color = (255, 255, 75), thickness = 1)
+
+                    # cv2.imshow("img", img)
+                    # while True:
+                    #     if cv2.waitKey() == 27: break
+
+                                
                     
-                    # compute intersection over union
-                    i_bboxes, gt_bboxes = infer_dict['bboxes'][i], gt_dict['bboxes'][j]
-                    iou = compute_iou(i_bboxes, gt_bboxes)
+                    # compute iou with each bbox of sliced of polygon 
+                    dv_iou_flag = False
+                    gt_xsort_bbox_list, gt_ysort_bbox_list = gt_dv_bbox_list
+                    inf_xsort_bbox_list, inf_ysort_bbox_list = inf_dv_bbox_list
+                    for inf_xsort_bbox, gt_xsort_bbox in zip(inf_xsort_bbox_list, gt_xsort_bbox_list):
+                        if compute_iou(inf_xsort_bbox, gt_xsort_bbox, confidence_score) < iou_threshold:  
+                            dv_iou_flag = True
+                            break
+                    for inf_ysort_bbox, gt_ysort_bbox in zip(inf_ysort_bbox_list, gt_ysort_bbox_list):
+                        if compute_iou(inf_ysort_bbox, gt_ysort_bbox, confidence_score) < iou_threshold:  
+                            dv_iou_flag = True
+                            break
+                    if dv_iou_flag: continue
+
+                    # count number of predicted object of each iou threshold
+                    # regardless of object name.
+                    # computed with sliced of polygon
+                    self.confusion_matrix[inf_object_name][iou_i]['num_dv_pred'] +=1
                     
-                    
-                    if (iou > threshold and          
-                        infer_dict['score'][i] > self.cfg.confidence_thrs):
-                        self.confusion_matrix[pred_class_name][idx]['num_pred'] +=1
-                        if pred_class_name == gt_class_name:  
-                            self.confusion_matrix[pred_class_name][idx]['num_true'] +=1
-                        
-                        # compute iou by sliced polygon 
-                        i_polygons, gt_polygons = infer_dict['polygons'][i], gt_dict['polygons'][j]
-                        gt_xsort_bbox_list, gt_ysort_bbox_list = get_divided_polygon(gt_polygons, window_num)
-                        i_xsort_bbox_list, i_ysort_bbox_list = get_divided_polygon(i_polygons, window_num)
-                    
-                        for i_xsort_bbox, gt_xsort_bbox in zip(i_xsort_bbox_list, gt_xsort_bbox_list):
-                            if compute_iou(i_xsort_bbox, gt_xsort_bbox) < threshold:  continue
-                        for i_ysort_bbox, gt_ysort_bbox in zip(i_ysort_bbox_list, gt_ysort_bbox_list):
-                            if compute_iou(i_ysort_bbox, gt_ysort_bbox) < threshold:  continue
-                        
-                        # for calculate recall by divided_polygon
-                        # number of predicted objects
-                        self.confusion_matrix[pred_class_name][idx]['num_dv_pred'] +=1
-                        
-                        if pred_class_name == gt_class_name: 
-                            # successfully predicted objects among predicted objects
-                            self.confusion_matrix[pred_class_name][idx]['num_dv_true'] +=1
-                        
-                        done_gt.append(j)
-                            
-        
-                        
- 
+                    # count number of predicted object of each iou threshold
+                    # regard of object name.
+                    # computed with sliced of polygon
+                    if inf_object_name == gt_object_name:
+                        # successfully predicted objects among predicted objects
+                        self.confusion_matrix[inf_object_name][iou_i]['num_dv_true'] +=1
+
