@@ -1,10 +1,11 @@
 import numpy as np
 import cv2
+import torch
 import warnings
 from hibernation_no1.mmdet.inference import inference_detector, parse_inferece_result
 from hibernation_no1.mmdet.visualization import mask_to_polygon
 
-def compute_iou(infer_box, gt_box, confidence_score):
+def compute_iou(infer_box, gt_box, confidence_score, img = None):
     """
     infer_box : x_min, y_min, x_max, y_max
     gt_box : x_min, y_min, x_max, y_max
@@ -27,6 +28,26 @@ def compute_iou(infer_box, gt_box, confidence_score):
     if outer == 0:
         return 1.0
     iou = inter / outer * confidence_score
+    
+    # if img is not None:
+    #     if iou > 0.5:
+    #         print(f"confidence_score : {confidence_score}")
+    #         print(f"outer : {outer}, inter ; {inter}")
+    #         print(f"inter / outer * confidence_score : {inter / outer * confidence_score} ")
+    #         print(f"inter / outer  : {inter / outer}")
+    #         infer_left_top =  [int(infer_box[0]), int(infer_box[1])]    
+    #         infer_right_bottom =  [int(infer_box[2]), int(infer_box[3])] 
+    #         cv2.rectangle(img, pt1 = infer_left_top, pt2 = infer_right_bottom, color = (255, 0, 0), thickness = 1)          
+    #         gt_left_top =  [int(gt_box[0]), int(gt_box[1])]    
+    #         gt_right_bottom =  [int(gt_box[2]), int(gt_box[3])] 
+    #         cv2.rectangle(img, pt1 = gt_left_top, pt2 = gt_right_bottom, color = (0, 0, 255), thickness = 1)      
+            
+    #         print(f"iou ; {iou}")
+    #         cv2.imshow("img", img)
+    #         while True:
+    #             if cv2.waitKey() == 27: break
+
+
     return iou
 
 
@@ -184,15 +205,15 @@ class Evaluate():
                 PR_list.append([threshold['precision'], threshold['recall'], threshold['threshold']])
                 dv_PR_list.append([threshold['dv_precision'], threshold['dv_recall'], threshold['threshold']])
 
-            PR_list.sort(key = lambda x : x[2])     # Sort by threshold
-            dv_PR_list.sort(key = lambda x : x[2])  # dv_PR_list.reverse()  
+            PR_list.sort(key = lambda x : x[2], reverse= True)     # Sort by threshold
+            dv_PR_list.sort(key = lambda x : x[2], reverse=True)  # dv_PR_list.reverse()  
  
             # adjust sum of recall
-            before_recall = sum_recall = 0
+            before_recall_dv = sum_recall = 0
             for idx, precision_recall in enumerate(dv_PR_list):
                 _, recall, _ = precision_recall
-                sum_recall +=abs(recall - before_recall)
-                before_recall = recall
+                sum_recall +=abs(recall - before_recall_dv)
+                before_recall_dv = recall
                 
             adjust_value = 1
             if sum_recall > 1:
@@ -204,101 +225,120 @@ class Evaluate():
                 adjust_value  = 1/sum_recall  
             
             
-            def compute_PR_area_(input_PR_list, adjust_value = 1):
+            def compute_PR_area_(input_PR_list, adjust_value = 1, flag = False):
                 ap_area = 0
                 before_recall, before_precision = 0, 1
-
+                before_recall_dif = 0
+                
+                print(F"\nclass_name:{class_name}")
+                if flag:    # ###
+                    print("not DV")
                 for idx, precision_recall in enumerate(input_PR_list):
-                    precision, recall, threshold = precision_recall
+                    precision, recall, _ = precision_recall
+                    print(f"precision, recall : {precision, recall}")
                     if idx == 0:
                         area = (precision*recall)
                         if adjust_value != 1:
                             area = area*adjust_value
                         ap_area +=area
                         before_recall, before_precision = recall, precision
+                        before_recall_dif = recall
+                        print(f"first area: {area:.4f},     ap_area ; {ap_area:.4f}")
                         continue
                     
                     # precision-recall curve is drawn from the right (high recall side)
                     # Because of this, before_recall have more large value
-                    if before_recall < recall: 
+                    if before_recall > recall: 
                         raise ValueError("recall value should increases, but decreases\n"
-                                         f"before_recall : {before_recall}, recall : {recall}")
+                                         f"before_recall : {before_recall:.4f}, recall : {recall:.4f}")
                      
-
+                   
                     # if recall remains the same and only precision increases
                     if before_recall == recall :
-                        if before_precision > precision:
+                        print(f"before_recall == recall", end='')
+                        if before_precision < precision:
                             # subtract previous value and add the current value
-                            area = ((precision*recall) - (before_precision*before_recall))
+                            area = ((precision*before_recall_dif) - (before_precision*before_recall_dif))
                             if adjust_value != 1:
                                 area = area*adjust_value
                             ap_area +=area
                             before_recall, before_precision = recall, precision
+                            print(f"    before_precision > precision, area : {area:.4f}     ap_area : {ap_area:.4f}")
                             continue
                         else:
+                            print(f"     esle area : {0}")
                             before_recall, before_precision = recall, precision
                             continue
                     
-                    
-
-                    recall_dif = before_recall - recall
+                    # precision-recall curve is drawn from the right (high recall side. from 1.0 to 0.0)    
+                    before_recall_dif = recall_dif = recall - before_recall        
                     if before_precision < precision:        # increases precision
                         precision_dif = precision - before_precision
-                        current_ap = (recall_dif * precision) - (precision_dif*recall_dif/2)
-                        area = current_ap
+                        area = (recall_dif * precision) - (precision_dif*recall_dif/2)
+                        print(f"before_precision < precision, area : {area:.4f}", end = '')
                     elif before_precision == precision:     # precision remains the same
                         area = (precision *recall_dif)
+                        print(f"before_precision == precision, area : {area:.4f}", end = '')
                     elif before_precision > precision:      # decreases precision
-                        precision_dif = precision - before_precision
-                        current_ap = (recall_dif * precision) + (precision_dif*recall_dif/2)
-                        area = current_ap
+                        precision_dif = before_precision - precision
+                        area = (recall_dif * precision) + (precision_dif*recall_dif/2)
+                        print(f"before_precision > precision, area : {area:.4f}", end = '')
+                     
                     before_recall, before_precision = recall, precision
                     if adjust_value != 1:
                         area = area*adjust_value
                     ap_area += area
+                    print(f"  ap_area : {ap_area:.4f}")
                 
+                if ap_area > 1.0:
+                    for idx, precision_recall in enumerate(input_PR_list):
+                        precision, recall, threshold = precision_recall
+                        print(f"precision, recall  {precision, recall, threshold}")
+
                 return ap_area
             
-            ap_area = compute_PR_area_(PR_list)
+            ap_area = compute_PR_area_(PR_list, flag = True)
        
             dv_ap_area = compute_PR_area_(dv_PR_list, adjust_value)
             
             
             ####----
-            # max_pre, max_recall = -1, -1
-            # for PR in PR_list:
-            #     precision, recall, _ = PR
-            #     if max_pre < precision:
-            #         max_pre = precision
-            #     if max_recall < recall:
-            #         max_recall = recall
+            max_pre, max_recall = -1, -1
+            for PR in PR_list:
+                precision, recall, _ = PR
+                if max_pre < precision:
+                    max_pre = precision
+                if max_recall < recall:
+                    max_recall = recall
             
-            # if max_recall !=0:
-            #     print(f"\nclass_name ; {class_name}")
-            #     import matplotlib.pyplot as plt
-            #     precision_list, recall_list = [1], [0]
-            #     fig, ax = plt.subplots(figsize = (10, 5))
-            #     for PR in PR_list:
-            #         precision, recall, _ = PR
-            #         precision_list.append(precision)
-            #         recall_list.append(recall)
+            if max_recall !=0:
+                print(f"\nclass_name ; {class_name}")
+                import matplotlib.pyplot as plt
+                precision_list, recall_list = [], []
+                fig, ax = plt.subplots(figsize = (10, 5))
+                for PR in PR_list:
+                    precision, recall, _ = PR
+                    precision_list.append(precision)
+                    recall_list.append(recall)
+                # precision_list.append(1)
+                # recall_list.append(0)
                 
-            #     ax.plot(recall_list, precision_list)
-            #     fig.tight_layout(pad = 3)
-            #     ax.set_title(f'PR, {class_name}, ap_area : {ap_area:.4f}', fontsize = 20)
+                ax.plot(recall_list, precision_list)
+                fig.tight_layout(pad = 3)
+                ax.set_title(f'PR, {class_name}, ap_area : {ap_area:.4f}', fontsize = 20)
 
                 
-            #     precision_list, recall_list = [0], [1]
-            #     fig_dv, ax_dv = plt.subplots(figsize = (10, 5))
-            #     for dv_PR in dv_PR_list:
-            #         precision, recall, _ = dv_PR
-            #         precision_list.append(precision)
-            #         recall_list.append(recall)
-                
-            #     ax_dv.plot(recall_list, precision_list)
-            #     fig_dv.tight_layout(pad = 3)
-            #     ax_dv.set_title(f'dv_PR, {class_name}, dv_ap_area : {dv_ap_area:.4f}', fontsize = 20)
-            #     plt.savefig( + '/filename.png')
+                precision_list, recall_list = [], []
+                fig_dv, ax_dv = plt.subplots(figsize = (10, 5))
+                for dv_PR in dv_PR_list:
+                    precision, recall, _ = dv_PR
+                    precision_list.append(precision)
+                    recall_list.append(recall)
+
+                ax_dv.plot(recall_list, precision_list)
+                fig_dv.tight_layout(pad = 3)
+                ax_dv.set_title(f'dv_PR, {class_name}, dv_ap_area : {dv_ap_area:.4f}', fontsize = 20)
+                plt.show()
                 
             # AP[class_name]["classes_dv_AP"] = round(dv_ap_area, 4)
             # AP[class_name]["classes_AP"] = round(ap_area, 4)
@@ -322,7 +362,7 @@ class Evaluate():
             for trsh_idx, threshold in enumerate(threshold_list):
                 self.precision_recall_dict[class_name][trsh_idx]['threshold'] = threshold['iou_threshold']
                 # compute recall
-                if threshold['num_gt'] == 0:    # class: `class_nema` is not exist in dataset
+                if threshold['num_gt'] == 0:    # class: `class_name` is not exist in dataset
                     recall = dv_recall = 0
                 else:  
                     recall = threshold['num_true']/threshold['num_gt']
@@ -330,7 +370,7 @@ class Evaluate():
                  
                 # compute precision
                 if threshold['num_pred'] == 0: 
-                    precision = dv_precision = 0
+                    precision = dv_precision = 1        # TODO: 1? 0?
                 else: 
                     if threshold['num_dv_pred'] == 0:   dv_precision = 0
                     else:   dv_precision = threshold['num_dv_true']/threshold['num_dv_pred']
@@ -363,78 +403,65 @@ class Evaluate():
                                             )
         
         for i, val_data_batch in enumerate(self.dataloader):
-            gt_bboxes_list = val_data_batch['gt_bboxes'].data
-            gt_labels_list = val_data_batch['gt_labels'].data
-            img_list = val_data_batch['img'].data       # img_list[0].shape : torch.Size([bach_size, 3, height, width])
-            gt_masks_list = val_data_batch['gt_masks'].data
-            assert len(gt_bboxes_list) == 1 and (len(gt_bboxes_list) ==
-                                                    len(gt_labels_list) ==
-                                                    len(img_list) == 
-                                                    len(gt_masks_list))
-            # len(batch_gt_bboxes): batch_size
-            batch_gt_bboxes = gt_bboxes_list[0]           
-            batch_gt_labels = gt_labels_list[0]  
-            batch_gt_masks = gt_masks_list[0]    
+            # len(batch_gt_bboxes): batch_size 
+            batch_gt_bboxes = val_data_batch['gt_bboxes'].data[0]
+            batch_gt_labels = val_data_batch['gt_labels'].data[0]
+            batch_gt_masks = val_data_batch['gt_masks'].data[0]
+            batch_gts = []
+            for gt_bboxes, gt_labels, gt_masks in zip(batch_gt_bboxes, batch_gt_labels, batch_gt_masks):
+                batch_gts.append([gt_bboxes, gt_labels, gt_masks])
             
+            batch_filepath = []
+            for img_meta in val_data_batch['img_metas'].data[0]:
+                batch_filepath.append(img_meta['file_path'])
 
-            img_metas = val_data_batch['img_metas'].data[0]
-            batch_images_path = []    
-            for img_meta in img_metas:
-                batch_images_path.append(img_meta['filename'])
-       
-            batch_results = inference_detector(self.model, batch_images_path, self.cfg.batch_size)
-                         
-            assert (len(batch_gt_bboxes) == 
-                        len(batch_gt_labels) ==
-                        len(batch_images_path) ==
-                        len(batch_gt_masks) ==
-                        len(batch_results))
-            batch_conf_list = [batch_gt_masks, batch_gt_bboxes, batch_gt_labels, batch_results]
-            
-            self.get_confusion_value(batch_conf_list, batch_images_path)
+            with torch.no_grad():
+            # len: batch_size
+                batch_results = inference_detector(self.model, batch_filepath)  
+
+            for results, ground_truths, file_path in zip(batch_results, batch_gts, batch_filepath):
+                self.get_confusion_value(ground_truths, results, file_path)
                                         
         self.compute_precision_recall()
     
-    
-    def get_confusion_value(self, batch_conf_list, batch_images_path = None):
-        batch_gt_masks, batch_gt_bboxes, batch_gt_labels, batch_results = batch_conf_list
-        
-        for i, (gt_mask, gt_bboxes, gt_labels, result) in enumerate(
-                zip(batch_gt_masks, batch_gt_bboxes, batch_gt_labels, batch_results)
-                ):
-            
-            i_bboxes, i_labels, i_mask = parse_inferece_result(result)
-          
-            if i_mask is not None:
-                if self.iou_threshold[0] > 0:
-                    assert i_bboxes is not None and i_bboxes.shape[1] == 5
-                    scores = i_bboxes[:, -1]
-                    inds = scores > self.iou_threshold[0]
-                    i_bboxes = i_bboxes[inds, :]
-                    i_labels = i_labels[inds]
-                    if i_mask is not None:
-                        i_mask = i_mask[inds, ...]
-                
-                i_cores = i_bboxes[:, -1]      # [num_instance]
-                i_bboxes = i_bboxes[:, :4]      # [num_instance, [x_min, y_min, x_max, y_max]]
 
-                
-                i_polygons = mask_to_polygon(i_mask)
-                gt_polygons = mask_to_polygon(gt_mask.masks)
-            else:   # detected nothing
-                i_cores = i_bboxes = i_polygons = gt_polygons = []
-                
-            infer_dict = dict(bboxes = i_bboxes,
-                            polygons = i_polygons,
-                            labels = i_labels,
-                            score = i_cores)
-            gt_dict = dict(bboxes = gt_bboxes,
-                        polygons = gt_polygons,
-                        labels = gt_labels)
+
+
+    def get_confusion_value(self, ground_truths, results, file_path):
+        infer_bboxes, infer_labels, infer_masks = parse_inferece_result(results) 
+        gt_bboxes, gt_labels, gt_masks = ground_truths  
+
+        if infer_masks is not None:
+            if self.iou_threshold[0] > 0:
+                assert infer_bboxes is not None and infer_bboxes.shape[1] == 5
+                scores = infer_bboxes[:, -1]
+                inds = scores > self.iou_threshold[0]
+                infer_bboxes = infer_bboxes[inds, :]
+                infer_labels = infer_labels[inds]
+                if infer_masks is not None:
+                    infer_masks = infer_masks[inds, ...]
             
-            img = cv2.imread(batch_images_path[i])
-            self.get_num_pred_truth(gt_dict, infer_dict, num_window = self.cfg.num_window, img = img)  
-    
+            infer_scores = infer_bboxes[:, -1]      # [num_instance]
+            infer_bboxes = infer_bboxes[:, :4]      # [num_instance, [x_min, y_min, x_max, y_max]]
+
+            
+            infer_polygons = mask_to_polygon(infer_masks)
+            gt_polygons = mask_to_polygon(gt_masks.masks)
+        else:   # detected nothing
+            infer_scores = infer_bboxes = infer_polygons = gt_polygons = []
+
+        
+        infer_dict = dict(bboxes = infer_bboxes,
+                          polygons = infer_polygons,
+                          labels = infer_labels,
+                          score = infer_scores)
+        gt_dict = dict(bboxes = gt_bboxes,
+                       polygons = gt_polygons,
+                       labels = gt_labels)
+            
+        img = cv2.imread(file_path)
+
+        self.get_num_pred_truth(gt_dict, infer_dict, num_window = self.cfg.num_window, img = img)  
     
     
     def get_num_pred_truth(self, gt_dict, infer_dict, num_window = 3, img = None):
@@ -451,7 +478,7 @@ class Evaluate():
                 inf_object_name = self.classes[infer_dict['labels'][inf_i]]
                 confidence_score = infer_dict['score'][inf_i]
 
-                iou = compute_iou(gt_bbox, inf_bbox, confidence_score) 
+                iou = compute_iou(gt_bbox, inf_bbox, confidence_score, img = img) 
 
                 for iou_i, iou_threshold in enumerate(self.iou_threshold):
                     
@@ -475,6 +502,28 @@ class Evaluate():
                     # compute iou by sliced polygon 
                     # polygons : [[x_1, y_1], [x_2, y_2], ..., [x_n, y_n]]
                     inf_polygons, gt_polygons = infer_dict['polygons'][inf_i], gt_dict['polygons'][gt_i]
+
+                    for point in gt_polygons:
+                        cv2.circle(img, point, color = (255, 255, 0), radius = 1, thickness = -1)
+                    
+                    for point in inf_polygons:
+                        cv2.circle(img, point, color = (0, 255, 255), radius = 1, thickness = -1)
+
+                    # inf_bboxes = infer_dict['bboxes'][inf_i] 
+                    # infer_left_top =  [int(inf_bboxes[0]), int(inf_bboxes[1])]    
+                    # infer_right_bottom =  [int(inf_bboxes[2]), int(inf_bboxes[3])]    
+                    # cv2.rectangle(img, pt1 = infer_left_top, pt2 = infer_right_bottom, color = (255, 0, 0), thickness = 1)          
+                    # gt_bboxes = gt_dict['bboxes'][gt_i]
+                    # gt_left_top =  [int(gt_bboxes[0]), int(gt_bboxes[1])]    
+                    # gt_right_bottom =  [int(gt_bboxes[2]), int(gt_bboxes[3])]   
+                    # cv2.rectangle(img, pt1 = gt_left_top, pt2 = gt_right_bottom, color = (0, 0, 255), thickness = 1)      
+                   
+
+                    # print(f"iou ; {iou}")
+                    # cv2.imshow("img", img)
+                    # while True:
+                    #     if cv2.waitKey() == 27: break
+                    
                    
                     gt_dv_bbox_list = get_divided_polygon(gt_polygons, num_window)
                     inf_dv_bbox_list = get_divided_polygon(inf_polygons, num_window)
