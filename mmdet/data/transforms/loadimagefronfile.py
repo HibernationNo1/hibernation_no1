@@ -41,19 +41,19 @@ class LoadImageFromFile:
         Returns:
             dict: The dict contains loaded image and meta information.
         """
-
+ 
         if results['img_prefix'] is not None:       # for train
-            filename = osp.join(results['img_prefix'],
-                                results['img_info']['filename'])
+            file_path = osp.join(results['img_prefix'],
+                                results['img_info']['file_name'])
         else:                                       # for inferene
-            filename = results['img_info']['filename']
+            file_path = results['img_info']['file_name']
         
-        img = cv2.imread(filename)
+        img = cv2.imread(file_path)
         if self.to_float32:
             img = img.astype(np.float32)
 
-        results['filename'] = filename
-        results['ori_filename'] = results['img_info']['filename']
+        results['file_path'] = file_path
+        results['filename'] = results['img_info']['file_name']
         results['img'] = img
         results['img_shape'] = img.shape
         results['ori_shape'] = img.shape
