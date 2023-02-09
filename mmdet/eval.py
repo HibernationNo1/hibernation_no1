@@ -3,7 +3,7 @@ import cv2
 import torch
 import warnings
 from hibernation_no1.mmdet.inference import inference_detector, parse_inferece_result
-from hibernation_no1.mmdet.visualization import mask_to_polygon
+from hibernation_no1.mmdet.visualization import mask_to_polygon, draw_PR_curve
 
 def compute_iou(infer_box, gt_box, confidence_score, img = None):
     """
@@ -35,13 +35,14 @@ def compute_iou(infer_box, gt_box, confidence_score, img = None):
     #         print(f"outer : {outer}, inter ; {inter}")
     #         print(f"inter / outer * confidence_score : {inter / outer * confidence_score} ")
     #         print(f"inter / outer  : {inter / outer}")
+    #         cv2.rectangle(img, pt1 = (int(x1), int(y1)), pt2 = (int(x2), int(y2)), color = (255, 255, 0), thickness = 2)      
     #         infer_left_top =  [int(infer_box[0]), int(infer_box[1])]    
     #         infer_right_bottom =  [int(infer_box[2]), int(infer_box[3])] 
     #         cv2.rectangle(img, pt1 = infer_left_top, pt2 = infer_right_bottom, color = (255, 0, 0), thickness = 1)          
     #         gt_left_top =  [int(gt_box[0]), int(gt_box[1])]    
     #         gt_right_bottom =  [int(gt_box[2]), int(gt_box[3])] 
-    #         cv2.rectangle(img, pt1 = gt_left_top, pt2 = gt_right_bottom, color = (0, 0, 255), thickness = 1)      
-            
+    #         cv2.rectangle(img, pt1 = gt_left_top, pt2 = gt_right_bottom, color = (0, 0, 255), thickness = 1)  
+
     #         print(f"iou ; {iou}")
     #         cv2.imshow("img", img)
     #         while True:
@@ -179,7 +180,23 @@ class Evaluate():
             F1_score['dv_F1_score'][class_name] = threshold_list[threshold_idx]['dv_F1_score']
             
         return F1_score
+    
+
+    def save_PR_curve(self, out_path):
+        for class_name, PR_curve_values in self.PR_curve_values.items():
+            draw_PR_curve(out_path,
+                          class_name, 
+                          PR_curve_values['PR_list'],
+                          self.PR_curve_values[class_name]['ap_area'])
+
+            draw_PR_curve(out_path,
+                          class_name, 
+                          PR_curve_values['dv_PR_list'],
+                          self.PR_curve_values[class_name]['dv_ap_area'],
+                          dv_flag = True)
+
             
+
 
     def compute_mAP(self):  
         AP = self.compute_PR_area()     
@@ -196,17 +213,14 @@ class Evaluate():
             
         return mAP_dict
       
+
     def compute_PR_area(self):
         AP = dict(classes_AP = dict(),
                   classes_dv_AP = dict())
-        for class_name, threshold_list in self.precision_recall_dict.items():
-            PR_list, dv_PR_list = [], []
-            for idx, threshold in enumerate(threshold_list):
-                PR_list.append([threshold['precision'], threshold['recall'], threshold['threshold']])
-                dv_PR_list.append([threshold['dv_precision'], threshold['dv_recall'], threshold['threshold']])
 
-            PR_list.sort(key = lambda x : x[2], reverse= True)     # Sort by threshold
-            dv_PR_list.sort(key = lambda x : x[2], reverse=True)  # dv_PR_list.reverse()  
+        for class_name, PR_curve_values in self.PR_curve_values.items():
+            PR_list = PR_curve_values['PR_list']
+            dv_PR_list = PR_curve_values['dv_PR_list']
  
             # adjust sum of recall
             before_recall_dv = sum_recall = 0
@@ -225,17 +239,26 @@ class Evaluate():
                 adjust_value  = 1/sum_recall  
             
             
-            def compute_PR_area_(input_PR_list, adjust_value = 1, flag = False):
+            def compute_PR_area_(input_PR_list, adjust_value = 1):
+                max_pre, max_recall = -1, -1
+                for PR in input_PR_list:
+                    precision, recall, _ = PR
+                    if max_pre < precision:
+                        max_pre = precision
+                    if max_recall < recall:
+                        max_recall = recall
+                if max_pre > 1 or max_recall : 
+                    raise ValueError(f"max value of precision or recall must be less than 1.0,"
+                                     f" but got (precision, recall): ({max_pre, max_recall})")
+
                 ap_area = 0
-                before_recall, before_precision = 0, 1
+                before_recall, before_precision = 0, 0
                 before_recall_dif = 0
                 
-                print(F"\nclass_name:{class_name}")
-                if flag:    # ###
-                    print("not DV")
+                print(F"\nclass_name: {class_name}")
                 for idx, precision_recall in enumerate(input_PR_list):
-                    precision, recall, _ = precision_recall
-                    print(f"precision, recall : {precision, recall}")
+                    precision, recall, threshold = precision_recall
+                    # print(f"precision, recall, threshold : {precision:.4f}, {recall:.4f}, {threshold}")
                     if idx == 0:
                         area = (precision*recall)
                         if adjust_value != 1:
@@ -255,7 +278,7 @@ class Evaluate():
                    
                     # if recall remains the same and only precision increases
                     if before_recall == recall :
-                        print(f"before_recall == recall", end='')
+                        # print(f"before_recall == recall", end='')
                         if before_precision < precision:
                             # subtract previous value and add the current value
                             area = ((precision*before_recall_dif) - (before_precision*before_recall_dif))
@@ -263,10 +286,10 @@ class Evaluate():
                                 area = area*adjust_value
                             ap_area +=area
                             before_recall, before_precision = recall, precision
-                            print(f"    before_precision > precision, area : {area:.4f}     ap_area : {ap_area:.4f}")
+                            # print(f"    before_precision > precision, area : {area:.4f}     ap_area : {ap_area:.4f}")
                             continue
                         else:
-                            print(f"     esle area : {0}")
+                            # print(f"     esle area : {0}")
                             before_recall, before_precision = recall, precision
                             continue
                     
@@ -275,14 +298,14 @@ class Evaluate():
                     if before_precision < precision:        # increases precision
                         precision_dif = precision - before_precision
                         area = (recall_dif * precision) - (precision_dif*recall_dif/2)
-                        print(f"before_precision < precision, area : {area:.4f}", end = '')
+                        # print(f"before_precision < precision, area : {area:.4f}", end = '')
                     elif before_precision == precision:     # precision remains the same
                         area = (precision *recall_dif)
-                        print(f"before_precision == precision, area : {area:.4f}", end = '')
+                        # print(f"before_precision == precision, area : {area:.4f}", end = '')
                     elif before_precision > precision:      # decreases precision
                         precision_dif = before_precision - precision
                         area = (recall_dif * precision) + (precision_dif*recall_dif/2)
-                        print(f"before_precision > precision, area : {area:.4f}", end = '')
+                        # print(f"before_precision > precision, area : {area:.4f}", end = '')
                      
                     before_recall, before_precision = recall, precision
                     if adjust_value != 1:
@@ -291,65 +314,18 @@ class Evaluate():
                     print(f"  ap_area : {ap_area:.4f}")
                 
                 if ap_area > 1.0:
-                    for idx, precision_recall in enumerate(input_PR_list):
-                        precision, recall, threshold = precision_recall
-                        print(f"precision, recall  {precision, recall, threshold}")
-
+                    raise ValueError(f"average precision must low than 1.0")
                 return ap_area
             
-            ap_area = compute_PR_area_(PR_list, flag = True)
-       
-            dv_ap_area = compute_PR_area_(dv_PR_list, adjust_value)
+            ap_area = round(compute_PR_area_(PR_list), 4)
+            dv_ap_area = round(compute_PR_area_(dv_PR_list, adjust_value), 4)
             
+            self.PR_curve_values[class_name]['ap_area'] = ap_area
+            AP['classes_AP'][class_name] = ap_area
             
-            ####----
-            max_pre, max_recall = -1, -1
-            for PR in PR_list:
-                precision, recall, _ = PR
-                if max_pre < precision:
-                    max_pre = precision
-                if max_recall < recall:
-                    max_recall = recall
-            
-            if max_recall !=0:
-                print(f"\nclass_name ; {class_name}")
-                import matplotlib.pyplot as plt
-                precision_list, recall_list = [], []
-                fig, ax = plt.subplots(figsize = (10, 5))
-                for PR in PR_list:
-                    precision, recall, _ = PR
-                    precision_list.append(precision)
-                    recall_list.append(recall)
-                # precision_list.append(1)
-                # recall_list.append(0)
-                
-                ax.plot(recall_list, precision_list)
-                fig.tight_layout(pad = 3)
-                ax.set_title(f'PR, {class_name}, ap_area : {ap_area:.4f}', fontsize = 20)
-
-                
-                precision_list, recall_list = [], []
-                fig_dv, ax_dv = plt.subplots(figsize = (10, 5))
-                for dv_PR in dv_PR_list:
-                    precision, recall, _ = dv_PR
-                    precision_list.append(precision)
-                    recall_list.append(recall)
-
-                ax_dv.plot(recall_list, precision_list)
-                fig_dv.tight_layout(pad = 3)
-                ax_dv.set_title(f'dv_PR, {class_name}, dv_ap_area : {dv_ap_area:.4f}', fontsize = 20)
-                plt.show()
-                
-            # AP[class_name]["classes_dv_AP"] = round(dv_ap_area, 4)
-            # AP[class_name]["classes_AP"] = round(ap_area, 4)
-            # AP[class_name]["PR_list"] = PR_list
-            # AP[class_name]["dv_PR_list"] = dv_PR_list       
-            #### -----
-
-            
-
+            self.PR_curve_values[class_name]['dv_ap_area'] = dv_ap_area
             AP['classes_dv_AP'][class_name] = round(dv_ap_area, 4)
-            AP['classes_AP'][class_name] = round(ap_area, 4)
+            
 
            
         return AP
@@ -389,6 +365,21 @@ class Evaluate():
                 if dv_recall == 0 and dv_precision == 0: self.precision_recall_dict[class_name][trsh_idx]['dv_F1_score'] =0
                 else: self.precision_recall_dict[class_name][trsh_idx]['dv_F1_score'] = 2*(dv_precision*dv_recall)/(dv_precision+dv_recall)
         
+        self.PR_curve_values = dict()
+        for class_name, threshold_list in self.precision_recall_dict.items():
+            PR_list, dv_PR_list = [], []
+            for idx, threshold in enumerate(threshold_list):
+                PR_list.append([threshold['precision'], threshold['recall'], threshold['threshold']])
+                dv_PR_list.append([threshold['dv_precision'], threshold['dv_recall'], threshold['threshold']])
+
+            PR_list.sort(key = lambda x : x[2], reverse= True)     # Sort by threshold
+            dv_PR_list.sort(key = lambda x : x[2], reverse=True)  # dv_PR_list.reverse()  
+
+            self.PR_curve_values[class_name] = dict(PR_list = PR_list,
+                                                    dv_PR_list = dv_PR_list)
+
+        
+
 
     def get_precision_recall_value(self):
         for class_name in self.classes:
@@ -503,70 +494,11 @@ class Evaluate():
                     # polygons : [[x_1, y_1], [x_2, y_2], ..., [x_n, y_n]]
                     inf_polygons, gt_polygons = infer_dict['polygons'][inf_i], gt_dict['polygons'][gt_i]
 
-                    for point in gt_polygons:
-                        cv2.circle(img, point, color = (255, 255, 0), radius = 1, thickness = -1)
-                    
-                    for point in inf_polygons:
-                        cv2.circle(img, point, color = (0, 255, 255), radius = 1, thickness = -1)
-
-                    # inf_bboxes = infer_dict['bboxes'][inf_i] 
-                    # infer_left_top =  [int(inf_bboxes[0]), int(inf_bboxes[1])]    
-                    # infer_right_bottom =  [int(inf_bboxes[2]), int(inf_bboxes[3])]    
-                    # cv2.rectangle(img, pt1 = infer_left_top, pt2 = infer_right_bottom, color = (255, 0, 0), thickness = 1)          
-                    # gt_bboxes = gt_dict['bboxes'][gt_i]
-                    # gt_left_top =  [int(gt_bboxes[0]), int(gt_bboxes[1])]    
-                    # gt_right_bottom =  [int(gt_bboxes[2]), int(gt_bboxes[3])]   
-                    # cv2.rectangle(img, pt1 = gt_left_top, pt2 = gt_right_bottom, color = (0, 0, 255), thickness = 1)      
-                   
-
-                    # print(f"iou ; {iou}")
-                    # cv2.imshow("img", img)
-                    # while True:
-                    #     if cv2.waitKey() == 27: break
-                    
                    
                     gt_dv_bbox_list = get_divided_polygon(gt_polygons, num_window)
                     inf_dv_bbox_list = get_divided_polygon(inf_polygons, num_window)
                     if gt_dv_bbox_list is None or inf_dv_bbox_list is None:
-                        continue    # cannot be divided polygon cause the number of points is too small.
-
-               
-                    # print(f"iou ; {iou}")
-                    # print(f"confidence score : {infer_dict['score'][inf_i]}")
-                    # print(f"inf_object_name ; {inf_object_name}, gt_object_name ; {gt_object_name}")
-                    # gt_bbox_r = [int(i) for i in gt_bbox]
-                    # cv2.rectangle(img, (gt_bbox_r[0], gt_bbox_r[1]), (gt_bbox_r[2], gt_bbox_r[3]), color = (255, 255, 0), thickness = 1)
-                    # i_bbox_r = [int(i) for i in inf_bbox]
-                    # cv2.rectangle(img, (i_bbox_r[0], i_bbox_r[1]), (i_bbox_r[2], i_bbox_r[3]), color = (0, 255, 255), thickness = 1)
-
-                    # cv2.imshow("img", img)
-                    # while True:
-                    #     if cv2.waitKey() == 27: break
-
-                    # gt_xsort_bbox_list, gt_ysort_bbox_list = gt_dv_bbox_list
-                    # inf_xsort_bbox_list, inf_ysort_bbox_list = inf_dv_bbox_list
-
-                    # for i_i, (i_xsort_bbox, gt_xsort_bbox) in enumerate(zip(inf_xsort_bbox_list, gt_xsort_bbox_list)):
-                    #     dv_iou = compute_iou(i_xsort_bbox, gt_xsort_bbox)
-                    #     print(f"x_sort {i_i}, dv_iou_x : {dv_iou}")
-                    #     cv2.rectangle(img, (i_xsort_bbox[0], i_xsort_bbox[1]), (i_xsort_bbox[2], i_xsort_bbox[3]), color = (150, 255, 255), thickness = 1)
-                    #     cv2.rectangle(img, (gt_xsort_bbox[0], gt_xsort_bbox[1]), (gt_xsort_bbox[2], gt_xsort_bbox[3]), color = (255, 255, 150), thickness = 1)
-
-                    # cv2.imshow("img", img)
-                    # while True:
-                    #     if cv2.waitKey() == 27: break
-
-                    # for i_i, (i_ysort_bbox, gt_ysort_bbox) in enumerate(zip(inf_ysort_bbox_list, gt_ysort_bbox_list)):
-                    #     dv_iou = compute_iou(i_ysort_bbox, gt_ysort_bbox)
-                    #     print(f"y_sort {i_i}, dv_iou_y : {dv_iou}")
-                    #     cv2.rectangle(img, (i_ysort_bbox[0], i_ysort_bbox[1]), (i_ysort_bbox[2], i_ysort_bbox[3]), color = (75, 255, 255), thickness = 1)
-                    #     cv2.rectangle(img, (gt_ysort_bbox[0], gt_ysort_bbox[1]), (gt_ysort_bbox[2], gt_ysort_bbox[3]), color = (255, 255, 75), thickness = 1)
-
-                    # cv2.imshow("img", img)
-                    # while True:
-                    #     if cv2.waitKey() == 27: break
-
-                                
+                        continue    # cannot be divided polygon cause the number of points is too small.          
                     
                     # compute iou with each bbox of sliced of polygon 
                     dv_iou_flag = False
