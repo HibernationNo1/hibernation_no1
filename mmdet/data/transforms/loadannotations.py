@@ -67,7 +67,8 @@ class LoadAnnotations:
 
         Returns:
             dict: The dict contains loaded bounding box annotations.
-        """
+        """  
+        
         assert results.get("ann_info", None) is not None, f"results.keys() : {results.keys()}"
         ann_info = results['ann_info']
         

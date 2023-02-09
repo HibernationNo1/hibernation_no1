@@ -180,11 +180,11 @@ class CustomDataset(Dataset):
         total_ann_ids = []
         for d, i in enumerate(self.img_ids):
             info = self.coco.load_imgs([i])[0]
-            info['filename'] = info['file_name']
+            # info['filename'] = info['file_name']
             data_infos.append(info)                     # [{'license', 'file_name', 'coco_url', 'height', 'width', 'date_captured', 'flickr_url', 'id', 'filename'}]
             ann_ids = self.coco.get_ann_ids(img_ids=[i])
             total_ann_ids.extend(ann_ids)
-
+    
         assert len(set(total_ann_ids)) == len(
             total_ann_ids), f"Annotation ids in '{ann_file}' are not unique!"
       
@@ -317,7 +317,7 @@ class CustomDataset(Dataset):
         else:
             gt_bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
 
-        seg_map = img_info['filename'].replace('jpg', 'png')
+        seg_map = img_info['file_name'].replace('jpg', 'png')
 
         ann = dict(
             bboxes=gt_bboxes,
@@ -396,8 +396,9 @@ class CustomDataset(Dataset):
             dict: Training/test data (with annotation if `test_mode` is set \
                 True).
         """
+
         while True:
-            data = self.prepare_train_img(idx)    
+            data = self.prepare_train_img(idx) 
             if data is None:
                 idx = self._rand_another(idx)
                 continue
@@ -423,7 +424,7 @@ class CustomDataset(Dataset):
         img_info = self.data_infos[idx]
         ann_info = self.get_ann_info(idx)
         results = dict(img_info=img_info, ann_info=ann_info)
-        
+
         self.pre_pipeline(results)
         return self.pipeline(results)
         

@@ -30,7 +30,7 @@ class Compose:
             data = transform(data)
             if data is None:
                 return None
-    
+
         return data  
     
     def __repr__(self):

@@ -95,13 +95,14 @@ def load_state_dict(model: torch.nn.Module, state_dict, device = 'cuda:0',  logg
     
 
 
-def inference_detector(model, imgs_path, batch_size):
+def inference_detector(model, imgs_path):
     """Inference image(s) with the detector.
 
     Args:
         model (nn.Module): The loaded detector.
-        imgs (str/ndarray or list[str/ndarray] or tuple[str/ndarray]):
+        imgs_path (str/ndarray or list[str/ndarray] or tuple[str/ndarray]):
            Either image files or loaded images.
+        val: run infernce in validation mode
 
     Returns:
         If imgs is a list or tuple, the same length list type results
@@ -116,28 +117,29 @@ def inference_detector(model, imgs_path, batch_size):
     
     cfg = model.cfg
     device = next(model.parameters()).device  # model device
+    
 
     if  cfg.get("test_pipeline", None) is not None: 
         pipeline_cfg = cfg.test_pipeline
-    elif cfg.get("val_pipeline", None) is not None:
-        pipeline_cfg = cfg.val_pipeline
+    elif cfg.get("val_infer_pipeline", None) is not None:
+        pipeline_cfg = cfg.val_infer_pipeline
     else: raise ValueError("val or test config must be specific, but both got None")
 
     re_pipeline_cfg  = replace_ImageToTensor(pipeline_cfg)
     pipeline = Compose(re_pipeline_cfg)
     
     datas = []
+
     for img_path in imgs_path:
         # prepare data
-        data = dict(img_info=dict(filename=img_path), img_prefix=None)
-        
+        data = dict(img_info=dict(file_name=img_path), img_prefix=None)
         # build the data pipeline
         data = pipeline(data)
         datas.append(data)
     
     # just get the actual data from DataContainer
     # len(data): batch_szie
-    data = collate(datas, samples_per_gpu=batch_size)
+    data = collate(datas, samples_per_gpu=len(datas))
     
     
     data['img_metas'] = [img_metas.data[0] for img_metas in data['img_metas']]
