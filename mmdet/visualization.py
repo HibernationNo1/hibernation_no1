@@ -3,6 +3,8 @@ import cv2
 import random
 import math
 
+import matplotlib.pyplot as plt
+
 
 def mask_to_polygon(masks):
     polygons = []
@@ -193,3 +195,22 @@ def put_text(img, object_labels, bboxes, colors, fontface = cv2.FONT_HERSHEY_SIM
                     thickness = thickness)
     return img
 
+
+# TODO
+def draw_PR_curve(PR_list, class_name, ap_area, dv_flag = False):
+    precision_list, recall_list = [], []
+    fig, ax = plt.subplots(figsize = (10, 5))
+    for PR in PR_list:
+        precision, recall, _ = PR
+        precision_list.append(precision)
+        recall_list.append(recall)
+    
+    ax.plot(recall_list, precision_list)
+    fig.tight_layout(pad = 3)
+    if dv_flag:
+        ax.set_title(f'dv_PR, {class_name}, dv_ap_area : {ap_area:.4f}', fontsize = 20)
+    else:
+        ax.set_title(f'PR, {class_name}, ap_area : {ap_area:.4f}', fontsize = 20)
+
+    
+    plt.show()
