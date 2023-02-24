@@ -149,11 +149,17 @@ class Hook:
     
     
     
-    def get_memory_info(self, runner) :
+    def get_memory_info(self, runner = None, model = None) :
         """
             Size of tensor allocated to GPU and RAM(unit: GB)
         """
-        device = getattr(runner.model, 'output_device', None)
+        if runner is not None:
+            device = getattr(runner.model, 'output_device', None)
+        elif model is not None:
+            device = getattr(model, 'output_device', None)
+        else :
+            raise KeyError(f"One of runner and model must be not None, but both are None")
+            
         m_mem = torch.cuda.max_memory_allocated(device=device)
         c_mem = torch.cuda.memory_allocated(device=device)
         
