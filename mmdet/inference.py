@@ -95,7 +95,7 @@ def load_state_dict(model: torch.nn.Module, state_dict, device = 'cuda:0',  logg
     
 
 
-def inference_detector(model, imgs_path):
+def inference_detector(model, imgs_path, **kwargs):
     """Inference image(s) with the detector.
 
     Args:
@@ -155,6 +155,7 @@ def inference_detector(model, imgs_path):
     # forward the model
     with torch.no_grad():
         results = model(return_loss=False, rescale=True, **data)        # call model.forward
+    
     if not is_batch:
         return results[0]
     else:

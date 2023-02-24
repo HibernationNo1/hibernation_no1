@@ -48,7 +48,9 @@ class Validation_Hook(Hook):
         
         eval_cfg = dict(model= runner.model, 
                         cfg= self.val_cfg,
-                        dataloader= self.val_dataloader)
+                        dataloader= self.val_dataloader,
+                        get_memory_info = self.get_memory_info)  
+
         eval = Evaluate(**eval_cfg)   
         mAP = eval.compute_mAP()
         
@@ -166,7 +168,8 @@ class TensorBoard_Hook(Hook):
             self.writer_pvc = SummaryWriter(log_dir = self.pvc_dir)
                 
     def after_run(self, runner):
-        self.writer_pvc.close()
+        if runner.in_pipeline: 
+            self.writer_pvc.close()
         self.writer_result_dir.close()
 
 

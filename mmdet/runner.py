@@ -174,7 +174,7 @@ class Runner:
         # outputs: 
         # loss:total loss, log_vars: log_vars, num_samples: batch_size
         outputs = self.model.train_step(data_batch, self.optimizer)
-      
+     
             
         if not isinstance(outputs, dict):
             raise TypeError('"batch_processor()" or "model.train_step()"'
@@ -199,11 +199,11 @@ class Runner:
             self._inner_iter = i+1
 
             self.call_hook('before_train_iter')
-            # self.outputs: 
+            # self.outputs:         # TODO:
             #   loss:total loss, log_vars: log_vars, num_samples: batch_size
             self.run_iter(data_batch)
-            del self.data_batch     # preventing memory leaks
-            torch.cuda.empty_cache()
+            del self.data_batch         # delete training data for preventing memory leaks
+            torch.cuda.empty_cache()    # delete cache data of GPU 
             
             self.call_hook('after_train_iter')
             self._iter += 1

@@ -144,12 +144,14 @@ def get_box_from_pol(polygon):
                 
 
 class Evaluate():
-    def __init__(self, model, cfg, dataloader):
+    def __init__(self, model, cfg, dataloader, **kwargs):
         self.model = model
         self.cfg = cfg
         self.dataloader = dataloader
         self.classes = self.model.CLASSES
         self.confusion_matrix = dict()
+        self.kwargs = kwargs
+
         self.set_treshold()
         
         self.get_precision_recall_value()
@@ -408,7 +410,10 @@ class Evaluate():
 
             with torch.no_grad():
             # len: batch_size
-                batch_results = inference_detector(self.model, batch_filepath)  
+                inference_detector_cfg = dict(model = self.model, 
+                                              imgs_path = batch_filepath, 
+                                              get_memory_info = self.kwargs.get('get_memory_info', None))
+                batch_results = inference_detector(**inference_detector_cfg)  
 
             for results, ground_truths, file_path in zip(batch_results, batch_gts, batch_filepath):
                 self.get_confusion_value(ground_truths, results, file_path)
