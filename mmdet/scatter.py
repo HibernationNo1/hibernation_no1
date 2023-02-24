@@ -27,7 +27,7 @@ def scatter_inputs(inputs, target_gpus = [0], dim=0):
 
 
 
-# for only single cpu
+# for only single gpu
 # org : parallel > scatter_gather.py > scatter
 def parallel_scatter(inputs, target_gpus = [0], dim = 0):
     """Scatter inputs to target gpus.

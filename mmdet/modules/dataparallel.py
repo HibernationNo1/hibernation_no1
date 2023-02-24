@@ -73,5 +73,5 @@ class MMDataParallel(DataParallel):
         :class:`DataContainers` will still be gathered.
         """
         # kwargs.keys = ['return_loss', 'rescale', 'img_metas', 'img']
-       
+        
         return super().forward(*inputs, **kwargs)
