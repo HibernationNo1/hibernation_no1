@@ -249,7 +249,7 @@ class Evaluate():
                         max_pre = precision
                     if max_recall < recall:
                         max_recall = recall
-                if max_pre > 1 or max_recall : 
+                if max_pre > 1 or max_recall >1 : 
                     raise ValueError(f"max value of precision or recall must be less than 1.0,"
                                      f" but got (precision, recall): ({max_pre, max_recall})")
 
@@ -268,7 +268,7 @@ class Evaluate():
                         ap_area +=area
                         before_recall, before_precision = recall, precision
                         before_recall_dif = recall
-                        print(f"first area: {area:.4f},     ap_area ; {ap_area:.4f}")
+                        # print(f"first area: {area:.4f},     ap_area ; {ap_area:.4f}")
                         continue
                     
                     # precision-recall curve is drawn from the right (high recall side)
@@ -313,7 +313,7 @@ class Evaluate():
                     if adjust_value != 1:
                         area = area*adjust_value
                     ap_area += area
-                    print(f"  ap_area : {ap_area:.4f}")
+                    # print(f"  ap_area : {ap_area:.4f}")
                 
                 if ap_area > 1.0:
                     raise ValueError(f"average precision must low than 1.0")
