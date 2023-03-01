@@ -1,4 +1,5 @@
 import numpy as np
+import os, os.path as osp
 import cv2
 import torch
 import warnings
@@ -144,13 +145,14 @@ def get_box_from_pol(polygon):
                 
 
 class Evaluate():
-    def __init__(self, model, cfg, dataloader, **kwargs):
+    def __init__(self, model, cfg, dataloader, output_path = None, **kwargs):
         self.model = model
         self.cfg = cfg
         self.dataloader = dataloader
         self.classes = self.model.CLASSES
         self.confusion_matrix = dict()
         self.kwargs = kwargs
+        self.output_path = output_path
 
         self.set_treshold()
         
@@ -186,16 +188,20 @@ class Evaluate():
 
     def save_PR_curve(self, out_path):
         for class_name, PR_curve_values in self.PR_curve_values.items():
-            draw_PR_curve(out_path,
+            RP_out_path = osp.join(out_path, f'RP_curve_{class_name}.jpg')
+            draw_PR_curve(RP_out_path,
                           class_name, 
                           PR_curve_values['PR_list'],
-                          self.PR_curve_values[class_name]['ap_area'])
+                          self.PR_curve_values[class_name]['ap_area'],
+                          show_plot = self.cfg.show_plot)
 
-            draw_PR_curve(out_path,
+            dv_RP_out_path = osp.join(out_path, f'dv_RP_curve_{class_name}.jpg')
+            draw_PR_curve(dv_RP_out_path,
                           class_name, 
                           PR_curve_values['dv_PR_list'],
                           self.PR_curve_values[class_name]['dv_ap_area'],
-                          dv_flag = True)
+                          dv_flag = True,
+                          show_plot = self.cfg.show_plot)
 
             
 
@@ -212,6 +218,12 @@ class Evaluate():
             mAP = sum_AP/len(self.model.CLASSES)
             if key == 'classes_AP': mAP_dict['mAP'] = round(mAP, 4) 
             elif key == 'classes_dv_AP': mAP_dict['dv_mAP'] = round(mAP, 4) 
+
+        if self.cfg.save_plot:
+            if not osp.isdir(self.output_path):
+                raise OSerror(f"The path is not exist!  \n path: {self.output_path}")
+            self.save_PR_curve(self.output_path)
+
             
         return mAP_dict
       
