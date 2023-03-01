@@ -196,8 +196,7 @@ def put_text(img, object_labels, bboxes, colors, fontface = cv2.FONT_HERSHEY_SIM
     return img
 
 
-# TODO
-def draw_PR_curve(PR_list, class_name, ap_area, dv_flag = False):
+def draw_PR_curve(output_path, class_name, PR_list, ap_area, dv_flag = False, show_plot = False):
     precision_list, recall_list = [], []
     fig, ax = plt.subplots(figsize = (10, 5))
     for PR in PR_list:
@@ -208,9 +207,20 @@ def draw_PR_curve(PR_list, class_name, ap_area, dv_flag = False):
     ax.plot(recall_list, precision_list)
     fig.tight_layout(pad = 3)
     if dv_flag:
-        ax.set_title(f'dv_PR, {class_name}, dv_ap_area : {ap_area:.4f}', fontsize = 20)
+        ax.set_title(f"dv_PR of '{class_name}',  dv_ap_area : {ap_area:.4f}", fontsize = 20)
     else:
-        ax.set_title(f'PR, {class_name}, ap_area : {ap_area:.4f}', fontsize = 20)
+        ax.set_title(f"PR of '{class_name}',  ap_area : {ap_area:.4f}", fontsize = 20)
 
+    ax.grid(axis = 'x', linewidth = 1, linestyle = '--')
+    ax.grid(axis = 'y', linewidth = 1, linestyle = '--')
+    ticks = np.arange(0, 1.1, 0.1)
+    ax.set_xticks(ticks)  
+    ax.set_yticks(ticks)  
     
-    plt.show()
+    ax.set_xlim([0, 1.05])
+    ax.set_ylim([0, 1.05])
+
+    plt.savefig(output_path)
+    plt.close()
+    if show_plot:
+        plt.show()
