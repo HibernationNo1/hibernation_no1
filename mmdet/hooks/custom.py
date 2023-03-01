@@ -20,27 +20,31 @@ class Validation_Hook(Hook):
         self.unit, self.val_timing = interval[0], interval[1]
         self.val_dataloader = val_dataloader
         self.val_cfg = val_cfg
+        self.run_val = self.val_cfg['run']
         self.logger = logger 
 
     def every_n_inner_iters(self):
         return (self.iter_count) % self.val_timing == 0 if self.val_timing > 0 else False
     
     def after_train_iter(self, runner) -> None:     
-        self.iter_count +=1
-        if self.unit == 'iter' and\
-            self.every_n_inner_iters():
-            
-            result = self.validation(runner)
-            runner.val_result.append(result)
+        if self.run_val:
+
+            self.iter_count +=1
+            if self.unit == 'iter' and\
+                self.every_n_inner_iters():
+                
+                result = self.validation(runner)
+                runner.val_result.append(result)
         
     
     def after_train_epoch(self, runner) -> None: 
-        if self.unit == 'epoch' and\
-            self.every_n_epochs(runner, self.val_timing):
-            
-            result = self.validation(runner)
-            runner.val_result.append(result)
+        if self.run_val: 
+            if self.unit == 'epoch' and\
+                self.every_n_epochs(runner, self.val_timing):
                 
+                result = self.validation(runner)
+                runner.val_result.append(result)
+                    
         
     def validation(self, runner):
         model = runner.model
