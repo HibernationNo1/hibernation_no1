@@ -257,7 +257,7 @@ class Evaluate():
                 before_recall, before_precision = 0, 0
                 before_recall_dif = 0
                 
-                print(F"\nclass_name: {class_name}")
+                # print(F"\nclass_name: {class_name}")
                 for idx, precision_recall in enumerate(input_PR_list):
                     precision, recall, threshold = precision_recall
                     # print(f"precision, recall, threshold : {precision:.4f}, {recall:.4f}, {threshold}")
@@ -318,7 +318,7 @@ class Evaluate():
                 if ap_area > 1.0:
                     raise ValueError(f"average precision must low than 1.0")
                 return ap_area
-            
+
             ap_area = round(compute_PR_area_(PR_list), 4)
             dv_ap_area = round(compute_PR_area_(dv_PR_list, adjust_value), 4)
             
@@ -354,6 +354,10 @@ class Evaluate():
                     else:   dv_precision = threshold['num_dv_true']/threshold['num_dv_pred']
                     precision = threshold['num_true']/threshold['num_pred']                
 
+                if recall > 1.0:  recall = 1.0
+                if dv_recall > 1.0 : dv_recall = 1.0        # TODO
+
+
                 self.precision_recall_dict[class_name][trsh_idx]['recall'] = recall
                 self.precision_recall_dict[class_name][trsh_idx]['precision'] = precision
                 # compute F1_score with not divided polygons
@@ -368,19 +372,17 @@ class Evaluate():
                 else: self.precision_recall_dict[class_name][trsh_idx]['dv_F1_score'] = 2*(dv_precision*dv_recall)/(dv_precision+dv_recall)
         
         self.PR_curve_values = dict()
-        for class_name, threshold_list in self.precision_recall_dict.items():
+        for class_name, info_dict_list in self.precision_recall_dict.items():
             PR_list, dv_PR_list = [], []
-            for idx, threshold in enumerate(threshold_list):
-                PR_list.append([threshold['precision'], threshold['recall'], threshold['threshold']])
-                dv_PR_list.append([threshold['dv_precision'], threshold['dv_recall'], threshold['threshold']])
+            for idx, info_dict in enumerate(info_dict_list):
+                PR_list.append([info_dict['precision'], info_dict['recall'], info_dict['threshold']])
+                dv_PR_list.append([info_dict['dv_precision'], info_dict['dv_recall'], info_dict['threshold']])
 
             PR_list.sort(key = lambda x : x[2], reverse= True)     # Sort by threshold
-            dv_PR_list.sort(key = lambda x : x[2], reverse=True)  # dv_PR_list.reverse()  
+            dv_PR_list.sort(key = lambda x : x[2], reverse=True) 
 
             self.PR_curve_values[class_name] = dict(PR_list = PR_list,
                                                     dv_PR_list = dv_PR_list)
-
-        
 
 
     def get_precision_recall_value(self):
