@@ -633,13 +633,20 @@ class Evaluate():
      
         matchs_count = 0
         for info_gt in license_board_gt_list:
+            board_center_p_gt = info_gt.pop('board_center_p')
+            board_width_p_gt = info_gt.pop('width')
+            board_height_p_gt = info_gt.pop('height')
             for info_infer in license_board_infer_list:
+                board_center_p_infer = info_infer.pop('board_center_p')
+                board_width_p_infer = info_infer.pop('width')
+                board_height_p_infer = info_infer.pop('height')
+
                 if info_gt == info_infer :
                     # An inference can be considered correct 
                     # when the distance between the center points of the two boards is sufficiently close.
                     length_btw_board = get_distance(info_gt['board_center_p'], info_infer['board_center_p']) 
-                    if length_btw_board < info_gt['width'] * distance_thr_rate and \
-                       length_btw_board < info_gt['height'] * distance_thr_rate*2:
+                    if length_btw_board < board_width_p_gt * distance_thr_rate and \
+                       length_btw_board < board_height_p_gt * distance_thr_rate*2:
                        matchs_count+=1
         
         return matchs_count/len(license_board_gt_list)
