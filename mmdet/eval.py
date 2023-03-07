@@ -3,8 +3,9 @@ import os, os.path as osp
 import cv2
 import torch
 import warnings
-from hibernation_no1.mmdet.inference import inference_detector, parse_inferece_result
-from hibernation_no1.mmdet.visualization import mask_to_polygon, draw_PR_curve
+from hibernation_no1.mmdet.inference import inference_detector, parse_inference_result
+from hibernation_no1.mmdet.visualization import mask_to_polygon, draw_PR_curve, draw_to_img
+from hibernation_no1.mmdet.get_info_algorithm import Get_info
 
 def compute_iou(infer_box, gt_box, confidence_score, img = None):
     """
@@ -142,6 +143,8 @@ def get_box_from_pol(polygon):
     return [x_min, y_min, x_max, y_max]
         
 
+def get_distance(point_1, point_2):
+    return math.sqrt(math.pow(point_1[0] - point_2[0], 2) + math.pow(point_1[1] - point_2[1], 2))
                 
 
 class Evaluate():
@@ -153,6 +156,8 @@ class Evaluate():
         self.confusion_matrix = dict()
         self.kwargs = kwargs
         self.output_path = output_path
+        self.plot_dir = "plots"
+        self.img_result_dir = "images"
 
         self.set_treshold()
         
@@ -208,24 +213,31 @@ class Evaluate():
 
     def compute_mAP(self):  
         AP = self.compute_PR_area()     
-        mAP_dict = dict()
+        summary_dict = dict(normal = dict(),
+                            dv = dict())
         for key, class_ap in AP.items():
             sum_AP = 0
             for class_name, AP in class_ap.items():    
                 if AP >1.0: 
                     raise ValueError(f"key: {key}, class_name: {class_name}, AP: {AP}") 
+                
+                if key == 'classes_AP': summary_dict['normal'][f'{class_name} AP'] = round(AP, 4) 
+                if key == 'classes_dv_AP': summary_dict['dv'][f'{class_name} AP'] = round(AP, 4) 
                 sum_AP +=AP
             mAP = sum_AP/len(self.model.CLASSES)
-            if key == 'classes_AP': mAP_dict['mAP'] = round(mAP, 4) 
-            elif key == 'classes_dv_AP': mAP_dict['dv_mAP'] = round(mAP, 4) 
+            if key == 'classes_AP': summary_dict['normal']['mAP'] = round(mAP, 4) 
+            elif key == 'classes_dv_AP': summary_dict['dv']['dv_mAP'] = round(mAP, 4) 
 
         if self.cfg.save_plot:
             if not osp.isdir(self.output_path):
                 raise OSerror(f"The path is not exist!  \n path: {self.output_path}")
-            self.save_PR_curve(self.output_path)
+
+            plot_dir = osp.join(self.output_path, self.plot_dir)
+            os.makedirs(plot_dir, exist_ok = True)
+            self.save_PR_curve(plot_dir)
 
             
-        return mAP_dict
+        return summary_dict
       
 
     def compute_PR_area(self):
@@ -438,18 +450,24 @@ class Evaluate():
 
 
     def get_confusion_value(self, ground_truths, results, file_path):
-        infer_bboxes, infer_labels, infer_masks = parse_inferece_result(results) 
+        infer_bboxes, infer_labels, infer_masks = parse_inference_result(results) 
         gt_bboxes, gt_labels, gt_masks = ground_truths  
 
+        
         if infer_masks is not None:
-            if self.iou_threshold[0] > 0:
-                assert infer_bboxes is not None and infer_bboxes.shape[1] == 5
-                scores = infer_bboxes[:, -1]
-                inds = scores > self.iou_threshold[0]
-                infer_bboxes = infer_bboxes[inds, :]
-                infer_labels = infer_labels[inds]
-                if infer_masks is not None:
-                    infer_masks = infer_masks[inds, ...]
+            show_score_thr = self.cfg.get('show_score_thr', 0)
+           
+            assert infer_bboxes is not None and infer_bboxes.shape[1] == 5
+            scores = infer_bboxes[:, -1]
+            if show_score_thr > 0:
+                inds = scores > show_score_thr
+            else:
+                inds = scores > 0.5
+            infer_bboxes = infer_bboxes[inds, :]
+            infer_labels = infer_labels[inds]
+            if infer_masks is not None:
+                infer_masks = infer_masks[inds, ...]
+            
             
             infer_scores = infer_bboxes[:, -1]      # [num_instance]
             infer_bboxes = infer_bboxes[:, :4]      # [num_instance, [x_min, y_min, x_max, y_max]]
@@ -545,3 +563,90 @@ class Evaluate():
                         # successfully predicted objects among predicted objects
                         self.confusion_matrix[inf_object_name][iou_i]['num_dv_true'] +=1
 
+
+    def run_inference(self):
+        img_result_dir = osp.join(self.output_path, self.img_result_dir)
+        os.makedirs(img_result_dir, exist_ok = True)
+
+        for i, val_data_batch in enumerate(self.dataloader):
+            # len(batch_gt_bboxes): batch_size 
+            batch_gt_bboxes = val_data_batch['gt_bboxes'].data[0]
+            batch_gt_labels = val_data_batch['gt_labels'].data[0]
+            batch_gts = []
+            for gt_bboxes, gt_labels in zip(batch_gt_bboxes, batch_gt_labels):
+                # append score
+                gt_bboxes_scores = []
+                for gt_bboxe in gt_bboxes.tolist():
+                    gt_bboxe.append(100.)
+                    gt_bboxes_scores.append(gt_bboxe)
+                
+                batch_gts.append([np.array(gt_bboxes_scores), gt_labels.numpy()])
+            
+            batch_filepath = []
+            for img_meta in val_data_batch['img_metas'].data[0]:
+                batch_filepath.append(img_meta['file_path'])
+
+            with torch.no_grad():
+            # len: batch_size
+                inference_detector_cfg = dict(model = self.model, 
+                                              imgs_path = batch_filepath, 
+                                              get_memory_info = self.kwargs.get('get_memory_info', None))
+                batch_results = inference_detector(**inference_detector_cfg)  
+
+            for filepath, results, ground_truths in zip(batch_filepath, batch_results, batch_gts):
+                bboxes, labels, masks = parse_inference_result(results) 
+                
+                # Save the image with the inference result drawn
+                img = cv2.imread(filepath)
+                draw_cfg = dict(img = img,
+                                bboxes = bboxes,
+                                labels = labels,
+                                masks = masks,
+                                class_names = self.classes,
+                                score_thr = self.cfg.get('show_score_thr', 0.5))
+                img = draw_to_img(**draw_cfg)       # Draw bbox, seg, label and save drawn_img
+
+                out_file = osp.join(img_result_dir, osp.basename(filepath))
+                cv2.imwrite(out_file, img) 
+
+                # Compute the ratio of how accurately the board's information was inferred 
+                # by comparing the ground truth and the inference results.
+                if self.cfg.compare_board_info: 
+                    bboxes_gt, labels_gt = ground_truths 
+                    correct_inference_rate = self.compare_board_info(bboxes, labels, bboxes_gt, labels_gt)
+                    return correct_inference_rate
+                else: 
+                    return None
+
+
+    
+    def compare_board_info(self, bboxes_infer, labels_infer, bboxes_gt, labels_gt, distance_thr_rate = 0.1):    
+        get_info_infer = Get_info(bboxes_infer, labels_infer,
+                                  self.classes,
+                                  score_thr = self.cfg.get('show_score_thr', 0.5))
+        license_board_infer_list = get_info_infer.get_board_info()
+        
+        get_info_gt = Get_info(bboxes_gt, labels_gt,
+                               self.classes, 
+                               score_thr = self.cfg.get('show_score_thr', 0.5))
+        license_board_gt_list = get_info_gt.get_board_info()
+     
+        matchs_count = 0
+        for info_gt in license_board_gt_list:
+            for info_infer in license_board_infer_list:
+                if info_gt == info_infer :
+                    # An inference can be considered correct 
+                    # when the distance between the center points of the two boards is sufficiently close.
+                    length_btw_board = get_distance(info_gt['board_center_p'], info_infer['board_center_p']) 
+                    if length_btw_board < info_gt['width'] * distance_thr_rate and \
+                       length_btw_board < info_gt['height'] * distance_thr_rate*2:
+                       matchs_count+=1
+        
+        return matchs_count/len(license_board_gt_list)
+
+                               
+                                
+
+                    
+
+                
