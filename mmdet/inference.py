@@ -162,7 +162,7 @@ def inference_detector(model, imgs_path, **kwargs):
         return results
 
  
-def parse_inferece_result(result):
+def parse_inference_result(result):
     if isinstance(result, tuple):
         bbox_result, segm_result = result
         if isinstance(segm_result, tuple):

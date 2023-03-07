@@ -51,7 +51,7 @@ from .modules.detector.maskrcnn import MaskRCNN
 __all__ = [
     "load_checkpoint", "save_checkpoint",
     "Evaluate", "compute_iou", "get_divided_polygon", "divide_polygon", "get_box_from_pol",
-    'parse_inferece_result', "inference_detector",
+    'parse_inference_result', "inference_detector",
     "DefaultOptimizerConstructor", "build_optimizer",
     "Registry", "build_from_cfg", 
     "Runner", "build_runner",
