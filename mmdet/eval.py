@@ -198,7 +198,7 @@ class Evaluate():
                           class_name, 
                           PR_curve_values['PR_list'],
                           self.PR_curve_values[class_name]['ap_area'],
-                          show_plot = self.cfg.show_plot)
+                          show_plot = self.cfg.get('show_plot', False))
 
             dv_RP_out_path = osp.join(out_path, f'dv_RP_curve_{class_name}.jpg')
             draw_PR_curve(dv_RP_out_path,
@@ -206,7 +206,7 @@ class Evaluate():
                           PR_curve_values['dv_PR_list'],
                           self.PR_curve_values[class_name]['dv_ap_area'],
                           dv_flag = True,
-                          show_plot = self.cfg.show_plot)
+                          show_plot = self.cfg.get('show_plot', False))
 
             
 
@@ -226,9 +226,9 @@ class Evaluate():
                 sum_AP +=AP
             mAP = sum_AP/len(self.model.CLASSES)
             if key == 'classes_AP': summary_dict['normal']['mAP'] = round(mAP, 4) 
-            elif key == 'classes_dv_AP': summary_dict['dv']['dv_mAP'] = round(mAP, 4) 
+            elif key == 'classes_dv_AP': summary_dict['dv']['mAP'] = round(mAP, 4) 
 
-        if self.cfg.save_plot:
+        if (self.cfg.get('save_plot', False)) and (self.output_path is not None):
             if not osp.isdir(self.output_path):
                 raise OSerror(f"The path is not exist!  \n path: {self.output_path}")
 
@@ -565,8 +565,11 @@ class Evaluate():
 
 
     def run_inference(self):
-        img_result_dir = osp.join(self.output_path, self.img_result_dir)
-        os.makedirs(img_result_dir, exist_ok = True)
+        # If self.output_path is None then the directory does not yet exist.
+        if self.output_path is not None:
+            img_result_dir = osp.join(self.output_path, self.img_result_dir)
+            os.makedirs(img_result_dir, exist_ok = True)
+        else: return None
 
         for i, val_data_batch in enumerate(self.dataloader):
             # len(batch_gt_bboxes): batch_size 
@@ -595,7 +598,8 @@ class Evaluate():
 
             for filepath, results, ground_truths in zip(batch_filepath, batch_results, batch_gts):
                 bboxes, labels, masks = parse_inference_result(results) 
-                
+                print(f"mask : {masks}")
+                print(f"type(masks) ; {type(masks)}")
                 # Save the image with the inference result drawn
                 img = cv2.imread(filepath)
                 draw_cfg = dict(img = img,
@@ -611,7 +615,7 @@ class Evaluate():
 
                 # Compute the ratio of how accurately the board's information was inferred 
                 # by comparing the ground truth and the inference results.
-                if self.cfg.compare_board_info: 
+                if self.cfg.get('compare_board_info', False): 
                     bboxes_gt, labels_gt = ground_truths 
                     correct_inference_rate = self.compare_board_info(bboxes, labels, bboxes_gt, labels_gt)
                     return correct_inference_rate
