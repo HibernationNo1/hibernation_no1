@@ -52,7 +52,7 @@ def save_checkpoint(model: torch.nn.Module,
         checkpoint['optimizer'] = {}
         for name, optim in optimizer.items():
             checkpoint['optimizer'][name] = optim.state_dict()
-            
+    
     # save model
     torch.save(checkpoint, filename)
     

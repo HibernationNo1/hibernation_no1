@@ -598,8 +598,9 @@ class Evaluate():
 
             for filepath, results, ground_truths in zip(batch_filepath, batch_results, batch_gts):
                 bboxes, labels, masks = parse_inference_result(results) 
-                print(f"mask : {masks}")
-                print(f"type(masks) ; {type(masks)}")
+
+                if masks is None: continue      # When nothing is detected: continue
+
                 # Save the image with the inference result drawn
                 img = cv2.imread(filepath)
                 draw_cfg = dict(img = img,
@@ -621,6 +622,7 @@ class Evaluate():
                     return correct_inference_rate
                 else: 
                     return None
+            return None
 
 
     
