@@ -12,11 +12,13 @@ class Validation_Hook(Hook):
                  val_dataloader: DataLoader,
                  result_dir = None,
                  logger = None,
+                 run_infer = False,
                  interval = ['iter', 50],
                  val_cfg = None
                 ):
         self.iter_count = 1
         self.result_dir = result_dir
+        self.run_infer = run_infer
         self.unit, self.val_timing = interval[0], interval[1]
         self.val_dataloader = val_dataloader
         self.val_cfg = val_cfg
@@ -50,13 +52,25 @@ class Validation_Hook(Hook):
         model = runner.model
         model.eval()
         
+        # Check if the directory path to save exists.
+        if hasattr(runner, "dir_to_save"):
+            output_path = runner.dir_to_save
+        else:
+            output_path = None
+
         eval_cfg = dict(model= runner.model, 
                         cfg= self.val_cfg,
                         dataloader= self.val_dataloader,
-                        get_memory_info = self.get_memory_info)  
+                        get_memory_info = self.get_memory_info,
+                        output_path = output_path)  
 
-        eval = Evaluate(**eval_cfg)   
-        mAP = eval.compute_mAP()
+        eval_ = Evaluate(**eval_cfg)   
+        summary = eval_.compute_mAP()
+
+        if self.run_infer:
+            correct_inference_rate = eval_.run_inference()
+            if correct_inference_rate is not None:
+                summary['correct_inference_rate'] = correct_inference_rate
         
         model.train()
         log_dict_loss = dict(**runner.log_buffer.get_last())        
@@ -65,8 +79,8 @@ class Validation_Hook(Hook):
 
         result = dict(epoch = runner.epoch, 
                       inner_iter = runner.inner_iter, 
-                      mAP = mAP["mAP"],
-                      dv_mAP = mAP["dv_mAP"],
+                      mAP = summary['normal']['mAP'],
+                      dv_mAP = summary['dv']['mAP'],
                       **log_dict_loss)
     
         log_str = ""
@@ -92,6 +106,7 @@ class Validation_Hook(Hook):
         if self.logger is not None:
             self.logger.info(log_str)
         else: print(log_str)      # for Katib
+       
         
         return result
 
@@ -105,7 +120,7 @@ class TensorBoard_Hook(Hook):
         self.unit, self.timing = interval[0], interval[1]
         self.pvc_dir = pvc_dir
         self.writer_result_dir = SummaryWriter(log_dir = out_dir)    
-        
+
     def after_train_iter(self, runner) -> None: 
         if self.unit == 'iter' and\
             self.every_n_inner_iters(runner, self.timing):  
