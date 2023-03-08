@@ -391,9 +391,12 @@ class Runner:
         meta.update(epoch=self._epoch, 
                     iter=self._iter)
         
-   
+        # set dir to save
         filename = filename_tmpl.format(self._epoch)
-        filepath = osp.join(out_dir, filename)
+        dir_to_save = osp.join(out_dir, filename.split(".")[0])
+        os.makedirs(dir_to_save, exist_ok = True)
+        self.dir_to_save = dir_to_save
+        filepath = osp.join(dir_to_save, filename)
         optimizer = self.optimizer if save_optimizer else None
         
         sc_save_checkpoint(self.model, filepath, optimizer=optimizer, meta=meta)
