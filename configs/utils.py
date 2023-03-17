@@ -120,3 +120,10 @@ def get_tuple_key(cfg):
         return tmp_list
     
     else: return False
+
+
+def all_dict_in_list(list_):
+    for i in list_:
+        if not isinstance(i, dict):
+            return False
+    return True
