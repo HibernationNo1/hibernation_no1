@@ -265,7 +265,7 @@ class Evaluate():
                 adjust_value  = 1/sum_recall  
             
             
-            def compute_PR_area_(input_PR_list, adjust_value = 1):
+            def compute_PR_area_(input_PR_list, adjust_value = 1, dv = False):
                 max_pre, max_recall = -1, -1
                 for PR in input_PR_list:
                     precision, recall, _ = PR
@@ -278,39 +278,54 @@ class Evaluate():
                                      f" but got (precision, recall): ({max_pre, max_recall})")
 
                 ap_area = 0
+                stack_area = list()
                 before_recall, before_precision = 0, 0
                 before_recall_dif = 0
                 
                 # print(F"\nclass_name: {class_name}")
+                recall_precision_dict = dict()
                 for idx, precision_recall in enumerate(input_PR_list):
                     precision, recall, threshold = precision_recall
-                    # print(f"precision, recall, threshold : {precision:.4f}, {recall:.4f}, {threshold}")
+
+                    # Continue if low precision value obtained for the same recall value.
+                    if f"{recall}" not in recall_precision_dict.keys() :
+                        recall_precision_dict[f"{recall}"] = precision
+                    else:
+                        if recall_precision_dict[f"{recall}"] < precision:
+                            recall_precision_dict[f"{recall}"] = precision
+                        else:
+                            continue
+                            
+                    # first idx
                     if idx == 0:
                         area = (precision*recall)
                         if adjust_value != 1:
                             area = area*adjust_value
                         ap_area +=area
-                        before_recall, before_precision = recall, precision
+                        stack_area.append(area)
+                        before_recall, before_precision = recall, precision   
                         before_recall_dif = recall
-                        # print(f"first area: {area:.4f},     ap_area ; {ap_area:.4f}")
                         continue
                     
                     # precision-recall curve is drawn from the right (high recall side)
                     # Because of this, before_recall have more large value
-                    if before_recall > recall: 
+                    if before_recall > recall:    
                         raise ValueError("recall value should increases, but decreases\n"
                                          f"before_recall : {before_recall:.4f}, recall : {recall:.4f}")
                      
-                   
+
                     # if recall remains the same and only precision increases
                     if before_recall == recall :
                         # print(f"before_recall == recall", end='')
+                        recall_precision_dict[f"{recall}"]
+
                         if before_precision < precision:
                             # subtract previous value and add the current value
                             area = ((precision*before_recall_dif) - (before_precision*before_recall_dif))
                             if adjust_value != 1:
                                 area = area*adjust_value
                             ap_area +=area
+                            stack_area.append(area)
                             before_recall, before_precision = recall, precision
                             # print(f"    before_precision > precision, area : {area:.4f}     ap_area : {ap_area:.4f}")
                             continue
@@ -320,31 +335,36 @@ class Evaluate():
                             continue
                     
                     # precision-recall curve is drawn from the right (high recall side. from 1.0 to 0.0)    
-                    before_recall_dif = recall_dif = recall - before_recall        
+                    before_recall_dif = recall_dif = recall - before_recall     
                     if before_precision < precision:        # increases precision
                         precision_dif = precision - before_precision
                         area = (recall_dif * precision) - (precision_dif*recall_dif/2)
+                        # if area > 0.5: print(f"recall_dif : {recall_dif}, precision: {precision}, precision_dif: {precision_dif}")         ####
                         # print(f"before_precision < precision, area : {area:.4f}", end = '')
                     elif before_precision == precision:     # precision remains the same
                         area = (precision *recall_dif)
+                        # if area > 0.5: print(f"recall_dif : {recall_dif}, precision: {precision}")     ####
                         # print(f"before_precision == precision, area : {area:.4f}", end = '')
                     elif before_precision > precision:      # decreases precision
                         precision_dif = before_precision - precision
                         area = (recall_dif * precision) + (precision_dif*recall_dif/2)
+                        # if area > 0.5: print(f"recall_dif : {recall_dif}, precision: {precision}, precision_dif: {precision_dif}, ----")         ####
                         # print(f"before_precision > precision, area : {area:.4f}", end = '')
                      
                     before_recall, before_precision = recall, precision
                     if adjust_value != 1:
                         area = area*adjust_value
                     ap_area += area
+                    stack_area.append(area)
                     # print(f"  ap_area : {ap_area:.4f}")
                 
                 if ap_area > 1.0:
-                    raise ValueError(f"average precision must low than 1.0")
+                    raise ValueError(f"average precision must low than 1.0! but got {ap_area}."
+									 f"\n stack_area: {stack_area}, dv: {dv}")
                 return ap_area
 
             ap_area = round(compute_PR_area_(PR_list), 4)
-            dv_ap_area = round(compute_PR_area_(dv_PR_list, adjust_value), 4)
+            dv_ap_area = round(compute_PR_area_(dv_PR_list, adjust_value, dv = True), 4)
             
             self.PR_curve_values[class_name]['ap_area'] = ap_area
             AP['classes_AP'][class_name] = ap_area
@@ -643,14 +663,15 @@ class Evaluate():
             board_width_p_gt = info_gt.pop('width')
             board_height_p_gt = info_gt.pop('height')
             for info_infer in license_board_infer_list:
-                board_center_p_infer = info_infer.pop('board_center_p')
-                board_width_p_infer = info_infer.pop('width')
-                board_height_p_infer = info_infer.pop('height')
+                info_infer_ = info_infer.copy()
+                board_center_p_infer = info_infer_.pop('board_center_p')
+                board_width_p_infer = info_infer_.pop('width')
+                board_height_p_infer = info_infer_.pop('height')
 
-                if info_gt == info_infer :
+                if info_gt == info_infer_ :
                     # An inference can be considered correct 
                     # when the distance between the center points of the two boards is sufficiently close.
-                    length_btw_board = get_distance(info_gt['board_center_p'], info_infer['board_center_p']) 
+                    length_btw_board = get_distance(board_center_p_gt, board_center_p_infer) 
                     if length_btw_board < board_width_p_gt * distance_thr_rate and \
                        length_btw_board < board_height_p_gt * distance_thr_rate*2:
                        matchs_count+=1
