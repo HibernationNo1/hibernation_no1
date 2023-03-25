@@ -92,16 +92,22 @@ class Validation_Hook(Hook):
                 continue
             elif key == "inner_iter":
                 log_str +=f"[{item}/{runner._iterd_per_epochs}]     "
-                log_str +=f"\n"  # f"\n>>   "
+                log_str +=f"\n>>   "
                 continue                
             if type(item) == float:
                 item = round(item, 4)
-            if key != "dv_mAP": ###
-                log_str +=f"{key}={item}"
+            
+            if key == "mAP": 
+                log_str +=f"Validation-accuracy={item}"
+                log_str +=f"\n>>   "
+            
+            if key != "dv_mAP": 
+                log_str +=f"{key}={item},     "
+
             if key == "dv_mAP":
-                log_str +=f"\n   "  # f"\n>>   "
+                log_str +=f"\n>>   "
                     
-        log_str +=f"\n   "  # f"\n>>   "
+        log_str +=f"\n>>   "
         datatime = self.compute_sec_to_h_d(time.time() - runner.start_time)
         log_str+=f"datatime: {datatime}"
         log_str +=f"\n"
