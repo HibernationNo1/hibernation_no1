@@ -96,7 +96,7 @@ class Validation_Hook(Hook):
                       dv_mAP = summary['dv']['mAP'],
                       **log_dict_loss)
         
-        exit_per = False
+
         log_str = ""
         for key, item in result.items():
             if key == "epoch":
@@ -108,8 +108,6 @@ class Validation_Hook(Hook):
                 continue                
             if type(item) == float:
                 item = round(item, 4)
-            if key == 'mAP' and item > 0.5:
-                exit_per = True
             log_str +=f"{key}={item} ,     "
             if key == "dv_mAP":
                 log_str +=f"\n>>   "
@@ -123,8 +121,6 @@ class Validation_Hook(Hook):
             self.logger.info(log_str)
         else: print(log_str)     
        
-        if exit_per:
-            exit()
         return result
 
 
