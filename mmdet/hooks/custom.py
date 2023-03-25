@@ -11,10 +11,11 @@ class Validation_Hook(Hook):
     def __init__(self,
                  val_dataloader: DataLoader,
                  result_dir = None,
-                 logger = None,
-                 run_infer = False,
-                 interval = ['iter', 50],
-                 val_cfg = None
+                    logger = None,
+                    run_infer = False,
+                    interval = ['iter', 50],
+                    val_cfg = None,
+                    **kwargs
                 ):
         self.iter_count = 1
         self.result_dir = result_dir
@@ -23,7 +24,8 @@ class Validation_Hook(Hook):
         self.val_dataloader = val_dataloader
         self.val_cfg = val_cfg
         self.run_val = self.val_cfg['run']
-        self.logger = logger 
+        self.logger = logger
+        self.kwargs = kwargs
 
     def every_n_inner_iters(self):
         return (self.iter_count) % self.val_timing == 0 if self.val_timing > 0 else False
@@ -90,22 +92,22 @@ class Validation_Hook(Hook):
                 continue
             elif key == "inner_iter":
                 log_str +=f"[{item}/{runner._iterd_per_epochs}]     "
-                log_str +=f"\n>>   "
+                log_str +=f"\n   "
                 continue                
             if type(item) == float:
                 item = round(item, 4)
             log_str +=f"{key}: {item},     "
             if key == "dv_mAP":
-                log_str +=f"\n>>   "
+                log_str +=f"\n   "
                     
-        log_str +=f"\n>>   "
+        log_str +=f"\n   "
         datatime = self.compute_sec_to_h_d(time.time() - runner.start_time)
         log_str+=f"datatime: {datatime}"
         log_str +=f"\n"
         
         if self.logger is not None:
             self.logger.info(log_str)
-        else: print(log_str)      # for Katib
+        else: print(log_str)     
        
         
         return result
