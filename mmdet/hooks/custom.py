@@ -96,7 +96,8 @@ class Validation_Hook(Hook):
                 continue                
             if type(item) == float:
                 item = round(item, 4)
-            log_str +=f"{key}={item},     "
+            if key != "dv_mAP": ###
+                log_str +=f"{key}={item},     "
             if key == "dv_mAP":
                 log_str +=f"\n>>   "
                     
