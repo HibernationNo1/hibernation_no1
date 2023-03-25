@@ -2,6 +2,8 @@ import os, os.path as osp
 import time
 from torch.utils.data import DataLoader
 
+from hibernation_no1.utils.log import LOGGERS
+
 from hibernation_no1.mmdet.hooks.hook import Hook, HOOK
 from hibernation_no1.mmdet.eval import Evaluate
 from torch.utils.tensorboard import SummaryWriter
@@ -11,11 +13,12 @@ class Validation_Hook(Hook):
     def __init__(self,
                  val_dataloader: DataLoader,
                  result_dir = None,
-                    logger = None,
-                    run_infer = False,
-                    interval = ['iter', 50],
-                    val_cfg = None,
-                    **kwargs
+                 logger = None,
+                 run_infer = False,
+                 interval = ['iter', 50],
+                 val_cfg = None,
+                 katib_logger_name = 'katib' ,
+                 **kwargs
                 ):
         self.iter_count = 1
         self.result_dir = result_dir
@@ -24,8 +27,16 @@ class Validation_Hook(Hook):
         self.val_dataloader = val_dataloader
         self.val_cfg = val_cfg
         self.run_val = self.val_cfg['run']
-        self.logger = logger
         self.kwargs = kwargs
+        
+        log_file = osp.join(os.getcwd(), "test.log")
+
+        import logging
+
+        if LOGGERS.get(katib_logger_name, False):
+            self.logger = LOGGERS[katib_logger_name]['logger']
+        else: self.logger = logger
+  
 
     def every_n_inner_iters(self):
         return (self.iter_count) % self.val_timing == 0 if self.val_timing > 0 else False
@@ -98,6 +109,8 @@ class Validation_Hook(Hook):
                 item = round(item, 4)
             
             if key == "mAP": 
+                self.logger.info(f"Validation-accuracy={item}")
+                self.logger.info(f"{key}={item}")
                 log_str +=f"Validation-accuracy={item}"
                 log_str +=f"\n>>   "
             
