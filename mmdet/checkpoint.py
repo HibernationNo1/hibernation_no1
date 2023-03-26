@@ -12,7 +12,8 @@ from collections import OrderedDict
 def save_checkpoint(model: torch.nn.Module,
                     filename: str,
                     optimizer: Optional[Optimizer] = None,
-                    meta: Optional[dict] = None) -> None:
+                    meta: Optional[dict] = None,
+                    **kwargs) -> None:
     """Save checkpoint to file.
 
     The checkpoint will have 3 fields: ``meta``, ``state_dict`` and
@@ -28,6 +29,7 @@ def save_checkpoint(model: torch.nn.Module,
             Default: None.
             `New in version 1.3.16.`
     """
+    
     if meta is None:
         meta = {}
     elif not isinstance(meta, dict):
@@ -54,7 +56,11 @@ def save_checkpoint(model: torch.nn.Module,
             checkpoint['optimizer'][name] = optim.state_dict()
     
     # save model
-    torch.save(checkpoint, filename)
+    if not kwargs.get('katib', False):      
+        torch.save(checkpoint, filename)
+    else:
+        print(f"    Not save when running for with katib(experiment)")
+
     
  
 def weights_to_cpu(state_dict: OrderedDict) -> OrderedDict:
