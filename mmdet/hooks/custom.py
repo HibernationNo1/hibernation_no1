@@ -2,8 +2,6 @@ import os, os.path as osp
 import time
 from torch.utils.data import DataLoader
 
-from hibernation_no1.utils.log import LOGGERS
-
 from hibernation_no1.mmdet.hooks.hook import Hook, HOOK
 from hibernation_no1.mmdet.eval import Evaluate
 from torch.utils.tensorboard import SummaryWriter
@@ -17,7 +15,6 @@ class Validation_Hook(Hook):
                  run_infer = False,
                  interval = ['iter', 50],
                  val_cfg = None,
-                 katib_logger_name = 'katib' ,
                  **kwargs
                 ):
         self.iter_count = 1
@@ -31,11 +28,7 @@ class Validation_Hook(Hook):
         
         log_file = osp.join(os.getcwd(), "test.log")
 
-        import logging
-
-        if LOGGERS.get(katib_logger_name, False):
-            self.logger = LOGGERS[katib_logger_name]['logger']
-        else: self.logger = logger
+        self.logger = logger
   
 
     def every_n_inner_iters(self):
