@@ -69,7 +69,6 @@ class Runner:
         
         assert hasattr(model, 'train_step')
         
-        
         # check the type of `optimizer`
         if isinstance(optimizer, dict):
             for name, optim in optimizer.items():
@@ -93,7 +92,8 @@ class Runner:
                 f'meta must be a dict or None, but got {type(meta)}')
         
         self.batch_size = kwargs.get('batch_size', None)
-         
+        self.katib = kwargs.get('katib', False)
+            
         self.model = model
         self.in_pipeline = in_pipeline
         self.optimizer = optimizer
@@ -399,8 +399,13 @@ class Runner:
         filepath = osp.join(dir_to_save, filename)
         optimizer = self.optimizer if save_optimizer else None
         
-        sc_save_checkpoint(self.model, filepath, optimizer=optimizer, meta=meta)
-    
+        checkpoint_cfg = dict(model = self.model,
+                              filename = filepath,
+                              optimizer = optimizer,
+                              meta = meta,
+                              katib = self.katib)
+        sc_save_checkpoint(**checkpoint_cfg)
+
     
     def get(self, att_name: str):
         try:
