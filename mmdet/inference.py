@@ -108,7 +108,11 @@ def inference_detector(model, imgs_path, **kwargs):
         If imgs is a list or tuple, the same length list type results
         will be returned, otherwise return the detection results directly.
     """
-    
+
+    # Delete cache data of GPU 
+    # Running after OptimiZerHook(backward) can delete more cache data of GPU for validation.
+    torch.cuda.empty_cache()     
+
     if isinstance(imgs_path, (list, tuple)):
         is_batch = True
     else:
@@ -140,8 +144,7 @@ def inference_detector(model, imgs_path, **kwargs):
     # just get the actual data from DataContainer
     # len(data): batch_szie
     data = collate(datas, samples_per_gpu=len(datas))
-    
-    
+
     data['img_metas'] = [img_metas.data[0] for img_metas in data['img_metas']]
     data['img'] = [img.data[0] for img in data['img']]
     
@@ -155,13 +158,13 @@ def inference_detector(model, imgs_path, **kwargs):
     # forward the model
     with torch.no_grad():
         results = model(return_loss=False, rescale=True, **data)        # call model.forward
-    
+
     if not is_batch:
         return results[0]
     else:
         return results
 
- 
+
 def parse_inference_result(result):
     if isinstance(result, tuple):
         bbox_result, segm_result = result
