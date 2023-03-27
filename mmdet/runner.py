@@ -201,11 +201,13 @@ class Runner:
             self.call_hook('before_train_iter')
             # self.outputs:         # TODO:
             #   loss:total loss, log_vars: log_vars, num_samples: batch_size
+
             self.run_iter(data_batch)
             del self.data_batch         # delete training data for preventing memory leaks
-            torch.cuda.empty_cache()    # delete cache data of GPU 
-            
+  
+            # torch.cuda.empty_cache()    # delete cache data of GPU 
             self.call_hook('after_train_iter')
+
             self._iter += 1
         self.call_hook('after_train_epoch')
         self._epoch += 1
@@ -517,5 +519,5 @@ class LogBuffer:
     
     def clear_log(self):
         self.log_output.clear()
-        
-        
+
+    

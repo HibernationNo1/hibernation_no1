@@ -69,7 +69,7 @@ class Validation_Hook(Hook):
                         dataloader= self.val_dataloader,
                         get_memory_info = self.get_memory_info,
                         output_path = output_path)  
-
+        
         eval_ = Evaluate(**eval_cfg)   
         summary = eval_.compute_mAP()
 
@@ -112,7 +112,7 @@ class Validation_Hook(Hook):
         
         if self.logger is not None:
             self.logger.info(log_str)
-        else: print(log_str)     
+        else: print(log_str)   
        
         return result
 

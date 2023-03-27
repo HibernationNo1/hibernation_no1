@@ -133,7 +133,7 @@ class CheckpointHook(Hook):
             runner.meta['hook_msgs']['last_ckpt'] = osp.join(self.out_dir, cur_ckpt_filename)
 
        
-        # remove other checkpoints      # do not 
+        # remove other checkpoints      # do not TODO 
         if self.max_keep_ckpts > 0:
             if self.by_epoch:
                 current_ckpt = runner.epoch

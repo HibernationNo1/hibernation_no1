@@ -59,7 +59,7 @@ def save_checkpoint(model: torch.nn.Module,
     if not kwargs.get('katib', False):      
         torch.save(checkpoint, filename)
     else:
-        print(f"    Not save when running for with katib(experiment)")
+        print(f"    Not save model when running for with katib(experiment)")
 
     
  

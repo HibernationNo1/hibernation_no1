@@ -53,8 +53,7 @@ class OptimizerHook(Hook):
                 runner.log_buffer.update({'grad_norm': float(grad_norm)},
                                          runner.outputs['num_samples']) 
         # optimize (back propagation)
-        runner.optimizer.step() 
-           
+        runner.optimizer.step()           
                 
     def detect_anomalous_parameters(self, loss, runner):
         """
