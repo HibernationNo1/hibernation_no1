@@ -363,12 +363,13 @@ class Evaluate():
 									 f"\n stack_area: {stack_area}, dv: {dv}")
                 return ap_area
 
+            
             ap_area = round(compute_PR_area_(PR_list), 4)
             dv_ap_area = round(compute_PR_area_(dv_PR_list, adjust_value, dv = True), 4)
             
             self.PR_curve_values[class_name]['ap_area'] = ap_area
             AP['classes_AP'][class_name] = ap_area
-            
+
             self.PR_curve_values[class_name]['dv_ap_area'] = dv_ap_area
             AP['classes_dv_AP'][class_name] = round(dv_ap_area, 4)
             
@@ -414,7 +415,7 @@ class Evaluate():
                 # compute F1_score with divided polygons
                 if dv_recall == 0 and dv_precision == 0: self.precision_recall_dict[class_name][trsh_idx]['dv_F1_score'] =0
                 else: self.precision_recall_dict[class_name][trsh_idx]['dv_F1_score'] = 2*(dv_precision*dv_recall)/(dv_precision+dv_recall)
-        
+     
         self.PR_curve_values = dict()
         for class_name, info_dict_list in self.precision_recall_dict.items():
             PR_list, dv_PR_list = [], []
@@ -430,26 +431,36 @@ class Evaluate():
 
 
     def get_precision_recall_value(self):
-        for class_name in self.classes:
-            self.confusion_matrix[class_name] = []
-            for i in range(len(self.iou_threshold)):
-                self.confusion_matrix[class_name].append(dict(iou_threshold = self.iou_threshold[i],
-                                                num_gt = 0,         # number of ground truth object
-                                                num_dv_pred = 0,    # number of predicted objects by divided polygons
-                                                num_dv_true = 0,    # successfully predicted objects among predicted objects by divided polygons,
-                                                num_pred = 0,       # number of predicted objects 
-                                                num_true = 0)       # successfully predicted objects among predicted objects
-                                            )
-        
+        gt_classes = dict()
         for i, val_data_batch in enumerate(self.dataloader):
-            # len(batch_gt_bboxes): batch_size 
+            # len(batch_gt_labels): batch_size
             batch_gt_bboxes = val_data_batch['gt_bboxes'].data[0]
             batch_gt_labels = val_data_batch['gt_labels'].data[0]
             batch_gt_masks = val_data_batch['gt_masks'].data[0]
             batch_gts = []
             for gt_bboxes, gt_labels, gt_masks in zip(batch_gt_bboxes, batch_gt_labels, batch_gt_masks):
-                batch_gts.append([gt_bboxes, gt_labels, gt_masks])
+                for gt_label in gt_labels:
+                    if self.classes[gt_label] not in gt_classes.keys():
+                        gt_classes[self.classes[gt_label]] = 1
+                    else:
+                        gt_classes[self.classes[gt_label]] +=1
+
+                batch_gts.append([gt_bboxes, gt_labels, gt_masks]) 
             
+            # Define `self.confusion_matrix``
+            if i == 0:
+                for class_name in self.classes:
+                    self.confusion_matrix[class_name] = []
+                    for i in range(len(self.iou_threshold)):
+                        self.confusion_matrix[class_name].append(
+                            dict(iou_threshold = self.iou_threshold[i],
+                                num_gt = gt_classes[class_name] if class_name in gt_classes.keys() else 0,         # number of ground truth object
+                                num_dv_pred = 0,    # number of predicted objects by divided polygons
+                                num_dv_true = 0,    # successfully predicted objects among predicted objects by divided polygons,
+                                num_pred = 0,       # number of predicted objects 
+                                num_true = 0)       # successfully predicted objects among predicted objects
+                                )
+
             batch_filepath = []
             for img_meta in val_data_batch['img_metas'].data[0]:
                 batch_filepath.append(img_meta['file_path'])
@@ -462,8 +473,9 @@ class Evaluate():
                 batch_results = inference_detector(**inference_detector_cfg)  
 
             for results, ground_truths, file_path in zip(batch_results, batch_gts, batch_filepath):
-                self.get_confusion_value(ground_truths, results, file_path)
-                                        
+                self.get_confusion_value(ground_truths, results, file_path)        
+
+
         self.compute_precision_recall()
     
 
@@ -529,11 +541,6 @@ class Evaluate():
                 iou = compute_iou(gt_bbox, inf_bbox, confidence_score, img = img) 
 
                 for iou_i, iou_threshold in enumerate(self.iou_threshold):
-                    
-                    # count number of ground truth object of each iou threshold
-                    if inf_i == 0:      
-                        self.confusion_matrix[gt_object_name][iou_i]['num_gt'] +=1 
-
                     # should be upper than iou threshold
                     if iou < iou_threshold: continue  
 
@@ -627,7 +634,7 @@ class Evaluate():
                                 bboxes = bboxes,
                                 labels = labels,
                                 masks = masks,
-                                class_names = self.classes,
+                                class_names = self.classes.copy(),
                                 score_thr = self.cfg.get('show_score_thr', 0.5))
                 img = draw_to_img(**draw_cfg)       # Draw bbox, seg, label and save drawn_img
 
@@ -648,12 +655,12 @@ class Evaluate():
     
     def compare_board_info(self, bboxes_infer, labels_infer, bboxes_gt, labels_gt, distance_thr_rate = 0.1):    
         get_info_infer = Get_info(bboxes_infer, labels_infer,
-                                  self.classes,
+                                  self.classes.copy(),
                                   score_thr = self.cfg.get('show_score_thr', 0.5))
         license_board_infer_list = get_info_infer.get_board_info()
         
         get_info_gt = Get_info(bboxes_gt, labels_gt,
-                               self.classes, 
+                               self.classes.copy(), 
                                score_thr = self.cfg.get('show_score_thr', 0.5))
         license_board_gt_list = get_info_gt.get_board_info()
      
@@ -677,10 +684,5 @@ class Evaluate():
                        matchs_count+=1
         
         return matchs_count/len(license_board_gt_list)
-
-                               
-                                
-
-                    
 
                 
