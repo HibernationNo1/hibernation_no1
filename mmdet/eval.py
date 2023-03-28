@@ -193,6 +193,8 @@ class Evaluate():
 
     def save_PR_curve(self, out_path):
         for class_name, PR_curve_values in self.PR_curve_values.items():
+            if self.PR_curve_values[class_name].get('ap_area', None) is None: continue
+            
             RP_out_path = osp.join(out_path, f'RP_curve_{class_name}.jpg')
             draw_PR_curve(RP_out_path,
                           class_name, 
@@ -224,7 +226,8 @@ class Evaluate():
                 if key == 'classes_AP': summary_dict['normal'][f'{class_name} AP'] = round(AP, 4) 
                 if key == 'classes_dv_AP': summary_dict['dv'][f'{class_name} AP'] = round(AP, 4) 
                 sum_AP +=AP
-            mAP = sum_AP/len(self.model.CLASSES)
+
+            mAP = sum_AP/len(class_ap.keys())
             if key == 'classes_AP': summary_dict['normal']['mAP'] = round(mAP, 4) 
             elif key == 'classes_dv_AP': summary_dict['dv']['mAP'] = round(mAP, 4) 
 
@@ -245,6 +248,9 @@ class Evaluate():
                   classes_dv_AP = dict())
 
         for class_name, PR_curve_values in self.PR_curve_values.items():
+            # if number of ground truth is 0, continue
+            if self.confusion_matrix[class_name][0]['num_gt'] == 0: continue
+            
             PR_list = PR_curve_values['PR_list']
             dv_PR_list = PR_curve_values['dv_PR_list']
  
