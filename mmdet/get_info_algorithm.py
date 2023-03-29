@@ -48,7 +48,7 @@ class Get_info():
             self.bboxes_list.append(bbox_int)
             self.labels_list.append(self.classes[label])
 
-    def get_board_info(self):
+    def get_board_info(self, infer = True, check =False):
         board_type = ['r_board', 'l_board']
         number_box = ['r_m_n', 'r_s_n', 'l_m_n', 'l_s_n']
 
@@ -62,11 +62,12 @@ class Get_info():
                 self.number_box_idx_list.append(i)
             else:
                 self.text_idx_list.append(i)
-        
-        return self.get_numberboard_info()
+
+        return self.get_numberboard_info(check)
 
 
-    def get_numberboard_info(self):        
+    def get_numberboard_info(self, check = False):   
+        # `check` is for checking gt data
         number_board_list = []
         for board_idx in self.board_idx_list:
             board_bbox = self.bboxes_list[board_idx]
@@ -87,13 +88,23 @@ class Get_info():
                         if self.check_in_bbox(number_box_bbox, text_bbox):
                             x_center, _ = self.compute_center_point(text_bbox)
                             text_list.append([text_bbox, self.labels_list[text_idx], x_center])
-                         
-                    if self.labels_list[number_box_idx] in ['l_s_n', 'r_s_n']:                        
+
+                    if self.labels_list[number_box_idx] in ['l_s_n', 'r_s_n']:     
+                        if check:
+                            print(f"check sub_text")
+                            for text in text_list:
+                                print(f"{text[1]}")
+
                         if len(text_list) !=3: continue  
                         if text_list[-1][1].isdigit(): continue
                         board_dict['sub_text'] = [i[1] for i in text_list]
 
                     elif self.labels_list[number_box_idx] in ['l_m_n', 'r_m_n']:
+                        if check:
+                            print(f"check main_text")
+                            for text in text_list:
+                                print(f"{text[1]}")
+                    
                         if len(text_list) !=4: continue 
                         isdigit = True
                         for text in text_list:
@@ -102,8 +113,7 @@ class Get_info():
                                 break
                         if not isdigit: continue
                         board_dict['main_text'] = [i[1] for i in text_list]
-               
-                
+
             if board_dict.get('main_text', None) is not None and\
                 board_dict.get('sub_text', None):
                 number_board_list.append(board_dict)
