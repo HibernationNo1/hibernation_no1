@@ -162,8 +162,7 @@ class Evaluate():
         self.set_treshold()
         
         self.get_precision_recall_value()
-   
-    
+
     def set_treshold(self):
         num_thrshd_divi = self.cfg.num_thrs_divi
         thrshd_value = (self.cfg.iou_thrs[-1] - self.cfg.iou_thrs[0]) / num_thrshd_divi
@@ -194,7 +193,7 @@ class Evaluate():
     def save_PR_curve(self, out_path):
         for class_name, PR_curve_values in self.PR_curve_values.items():
             if self.PR_curve_values[class_name].get('ap_area', None) is None: continue
-            
+
             RP_out_path = osp.join(out_path, f'RP_curve_{class_name}.jpg')
             draw_PR_curve(RP_out_path,
                           class_name, 
@@ -209,9 +208,6 @@ class Evaluate():
                           self.PR_curve_values[class_name]['dv_ap_area'],
                           dv_flag = True,
                           show_plot = self.cfg.get('show_plot', False))
-
-            
-
 
     def compute_mAP(self):  
         AP = self.compute_PR_area()     
@@ -303,12 +299,12 @@ class Evaluate():
                             continue
                             
                     # first idx
-                    if idx == 0:
-                        area = (precision*recall)
+                    if idx == 0 or before_recall == 0.0:
+                        area = (precision*recall) - (recall * (1-precision) /2)
                         if adjust_value != 1:
                             area = area*adjust_value
                         ap_area +=area
-                        stack_area.append(area)
+                        stack_area.append([area, recall, precision])
                         before_recall, before_precision = recall, precision   
                         before_recall_dif = recall
                         continue
@@ -322,26 +318,26 @@ class Evaluate():
 
                     # if recall remains the same and only precision increases
                     if before_recall == recall :
-                        # print(f"before_recall == recall", end='')
-                        recall_precision_dict[f"{recall}"]
-
                         if before_precision < precision:
                             # subtract previous value and add the current value
-                            area = ((precision*before_recall_dif) - (before_precision*before_recall_dif))
+                            area = (((precision - before_precision) * before_recall_dif)
+                                     + ((1 - precision) * before_recall_dif /2) 
+                                     - (before_recall_dif * (1-before_precision) / 2) )
+                     
                             if adjust_value != 1:
                                 area = area*adjust_value
                             ap_area +=area
-                            stack_area.append(area)
-                            before_recall, before_precision = recall, precision
+                            stack_area.append([area, recall, precision])
+                            before_precision = precision
                             # print(f"    before_precision > precision, area : {area:.4f}     ap_area : {ap_area:.4f}")
                             continue
                         else:
                             # print(f"     esle area : {0}")
-                            before_recall, before_precision = recall, precision
+                            before_precision = precision
                             continue
                     
                     # precision-recall curve is drawn from the right (high recall side. from 1.0 to 0.0)    
-                    before_recall_dif = recall_dif = recall - before_recall     
+                    recall_dif = recall - before_recall     
                     if before_precision < precision:        # increases precision
                         precision_dif = precision - before_precision
                         area = (recall_dif * precision) - (precision_dif*recall_dif/2)
@@ -358,10 +354,11 @@ class Evaluate():
                         # print(f"before_precision > precision, area : {area:.4f}", end = '')
                      
                     before_recall, before_precision = recall, precision
+                    before_recall_dif = recall_dif
                     if adjust_value != 1:
                         area = area*adjust_value
                     ap_area += area
-                    stack_area.append(area)
+                    stack_area.append([area, recall, precision])
                     # print(f"  ap_area : {ap_area:.4f}")
                 
                 if ap_area > 1.0:
@@ -621,7 +618,7 @@ class Evaluate():
             batch_filepath = []
             for img_meta in val_data_batch['img_metas'].data[0]:
                 batch_filepath.append(img_meta['file_path'])
-
+  
             with torch.no_grad():
             # len: batch_size
                 inference_detector_cfg = dict(model = self.model, 
@@ -651,7 +648,8 @@ class Evaluate():
                 # by comparing the ground truth and the inference results.
                 if self.cfg.get('compare_board_info', False): 
                     bboxes_gt, labels_gt = ground_truths 
-                    correct_inference_rate = self.compare_board_info(bboxes, labels, bboxes_gt, labels_gt)
+                    correct_inference_rate = self.compare_board_info(bboxes, labels, bboxes_gt, labels_gt, 
+                                                                     filepath = filepath)
                     return correct_inference_rate
                 else: 
                     return None
@@ -659,7 +657,8 @@ class Evaluate():
 
 
     
-    def compare_board_info(self, bboxes_infer, labels_infer, bboxes_gt, labels_gt, distance_thr_rate = 0.1):    
+    def compare_board_info(self, bboxes_infer, labels_infer, bboxes_gt, labels_gt, 
+                           distance_thr_rate = 0.1, filepath = None):    
         get_info_infer = Get_info(bboxes_infer, labels_infer,
                                   self.classes.copy(),
                                   score_thr = self.cfg.get('show_score_thr', 0.5))
@@ -668,7 +667,15 @@ class Evaluate():
         get_info_gt = Get_info(bboxes_gt, labels_gt,
                                self.classes.copy(), 
                                score_thr = self.cfg.get('show_score_thr', 0.5))
-        license_board_gt_list = get_info_gt.get_board_info()
+        license_board_gt_list = get_info_gt.get_board_info(infer = False)
+        
+        if len(license_board_infer_list) == 0: return 0.0
+
+        num_board_gt = len(license_board_gt_list)
+        if num_board_gt == 0:
+            license_board_gt_list = get_info_gt.get_board_info(infer = False, check = True)
+            raise ValueError(f"The GT image is not suitable for performing `compare_board_info`."
+                            f"\nPlease check the validation image.  \n file_path: {filepath}")
      
         matchs_count = 0
         for info_gt in license_board_gt_list:
@@ -689,6 +696,6 @@ class Evaluate():
                        length_btw_board < board_height_p_gt * distance_thr_rate*2:
                        matchs_count+=1
         
-        return matchs_count/len(license_board_gt_list)
+        return matchs_count/num_board_gt
 
                 
