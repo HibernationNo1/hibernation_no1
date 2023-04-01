@@ -205,10 +205,10 @@ class Runner:
             self.run_iter(data_batch)
             del self.data_batch         # delete training data for preventing memory leaks
   
-            # torch.cuda.empty_cache()    # delete cache data of GPU 
             self.call_hook('after_train_iter')
 
             self._iter += 1
+            torch.cuda.empty_cache()    # delete cache data of GPU 
         self.call_hook('after_train_epoch')
         self._epoch += 1
             

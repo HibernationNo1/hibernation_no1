@@ -158,7 +158,9 @@ def inference_detector(model, imgs_path, **kwargs):
     # forward the model
     with torch.no_grad():
         results = model(return_loss=False, rescale=True, **data)        # call model.forward
-
+    
+    torch.cuda.empty_cache()  
+    
     if not is_batch:
         return results[0]
     else:
