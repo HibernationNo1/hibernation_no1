@@ -125,7 +125,6 @@ class LoggerHook(Hook):
         
             # log about momory
             if torch.cuda.is_available():
-                
                 memory = self.get_memory_info(runner)
                 GPU_total = memory['GPU']['total']
                 GPU_used = memory['GPU']['used']
@@ -140,7 +139,6 @@ class LoggerHook(Hook):
                 log_str += f'GPU memory [total: {GPU_total:.2f}GB,   using: {GPU_used:.2f}GB,  usage: {GPU_percent}]'
                 log_str += f'\n>>   '  
                 log_str += f'RAM memory [total: {RAM_total:.2f}GB,   using: {RAM_used:.2f}GB,  usage: {RAM_percent}]' 
-                
                 
             # log about training    
             if isinstance(log_dict['lr'], dict):

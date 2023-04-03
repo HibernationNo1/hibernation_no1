@@ -63,7 +63,6 @@ class Validation_Hook(Hook):
             output_path = runner.dir_to_save
         else:
             output_path = None
-
         eval_cfg = dict(model= runner.model, 
                         cfg= self.val_cfg,
                         dataloader= self.val_dataloader,
