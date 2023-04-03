@@ -5,7 +5,7 @@ import platform
 import re
 from dvc.config import Config
 
-# TODO: move to parent dir
+
 def get_dvc_config(default_remote: str):
     """convert dvc 'config' file content to dict
     
@@ -135,7 +135,12 @@ def dvc_pull(remote: str, bucket_name: str, client_secrets: dict, data_root: str
     subprocess.call([dvp_pull_srt], shell=True)           
     os.remove(client_secrets_path)
     
-    dataset_dir_path = osp.join(os.getcwd(), data_root)
+    if isdir(data_root):
+		dataset_dir_path = data_root
+	else:
+		dataset_dir_path = osp.join(os.getcwd(), data_root)
+    
+    
     assert osp.isdir(dataset_dir_path), f"Directory: {dataset_dir_path} is not exist!\n"\
         f"list fo dir : {os.listdir(osp.split(dataset_dir_path)[0])}"
     
