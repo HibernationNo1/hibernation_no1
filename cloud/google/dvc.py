@@ -136,9 +136,9 @@ def dvc_pull(remote: str, bucket_name: str, client_secrets: dict, data_root: str
     os.remove(client_secrets_path)
     
     if isdir(data_root):
-		dataset_dir_path = data_root
-	else:
-		dataset_dir_path = osp.join(os.getcwd(), data_root)
+        dataset_dir_path = data_root
+    else:
+        dataset_dir_path = osp.join(os.getcwd(), data_root)
     
     
     assert osp.isdir(dataset_dir_path), f"Directory: {dataset_dir_path} is not exist!\n"\
