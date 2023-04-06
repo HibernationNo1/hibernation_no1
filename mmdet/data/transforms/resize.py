@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
-from hibernation_no1.mmdet.data.transforms.compose import PIPELINES
-from hibernation_no1.mmdet.data.transforms.utils import imresize, imrescale
+from sub_module.mmdet.data.transforms.compose import PIPELINES
+from sub_module.mmdet.data.transforms.utils import imresize, imrescale
 
 
 

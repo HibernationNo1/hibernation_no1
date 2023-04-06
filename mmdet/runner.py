@@ -7,12 +7,12 @@ import torch
 from torch.optim import Optimizer
 
 
-from hibernation_no1.mmdet.utils import get_host_info, compute_sec_to_h_d
-from hibernation_no1.mmdet.eval import Evaluate
+from sub_module.mmdet.utils import get_host_info, compute_sec_to_h_d
+from sub_module.mmdet.eval import Evaluate
 
-from hibernation_no1.mmdet.registry import build_from_cfg
-from hibernation_no1.mmdet.hooks.hook import Hook, HOOK
-from hibernation_no1.mmdet.checkpoint import save_checkpoint as sc_save_checkpoint 
+from sub_module.mmdet.registry import build_from_cfg
+from sub_module.mmdet.hooks.hook import Hook, HOOK
+from sub_module.mmdet.checkpoint import save_checkpoint as sc_save_checkpoint 
 
 priority_dict = {'HIGHEST' : 0,
                  'VERY_HIGH' : 10,

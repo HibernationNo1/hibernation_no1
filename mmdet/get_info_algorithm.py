@@ -1,5 +1,5 @@
-from hibernation_no1.mmdet.visualization import mask_to_polygon
-from hibernation_no1.mmdet.inference import parse_inference_result
+from sub_module.mmdet.visualization import mask_to_polygon
+from sub_module.mmdet.inference import parse_inference_result
 
 class Get_info():
     def __init__(self, 

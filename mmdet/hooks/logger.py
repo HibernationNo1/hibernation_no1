@@ -6,8 +6,8 @@ import psutil
 
 from collections import OrderedDict
 
-from hibernation_no1.utils.utils import is_list_of, is_tuple_of, dict_to_pretty
-from hibernation_no1.mmdet.hooks.hook import Hook, HOOK
+from sub_module.utils.utils import is_list_of, is_tuple_of, dict_to_pretty
+from sub_module.mmdet.hooks.hook import Hook, HOOK
 from typing import Optional, Dict
 
 @HOOK.register_module()

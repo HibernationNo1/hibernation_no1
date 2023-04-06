@@ -1,7 +1,7 @@
 
 from itertools import chain
 from torch.nn.parallel import DataParallel
-from hibernation_no1.mmdet.scatter import scatter_inputs
+from sub_module.mmdet.scatter import scatter_inputs
 
 def build_dp(model, cfg = None, device='cuda', dim=0, **kwargs):
     if device == 'cuda': 

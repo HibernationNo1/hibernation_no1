@@ -2,7 +2,7 @@ import logging
 import torch
 from torch.nn.utils import clip_grad
 
-from hibernation_no1.mmdet.hooks.hook import Hook, HOOK
+from sub_module.mmdet.hooks.hook import Hook, HOOK
 
 @HOOK.register_module()
 class OptimizerHook(Hook):

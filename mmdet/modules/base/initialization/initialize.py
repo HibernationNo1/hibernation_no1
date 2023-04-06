@@ -5,8 +5,8 @@ import torch.nn as nn
 
 from typing import List, Union, Dict
 
-from hibernation_no1.mmdet.modules.base.initialization.normal import NormalInit
-from hibernation_no1.mmdet.modules.base.initialization.xavier import XavierInit   
+from sub_module.mmdet.modules.base.initialization.normal import NormalInit
+from sub_module.mmdet.modules.base.initialization.xavier import XavierInit   
 
 def initialize(module: nn.Module, init_cfg: Union[Dict, List[dict]]):
     """Initialize a module.

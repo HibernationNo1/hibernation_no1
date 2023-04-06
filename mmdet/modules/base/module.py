@@ -8,8 +8,8 @@ from typing import Optional, Iterable
 from abc import ABCMeta
 from collections import defaultdict
 
-from hibernation_no1.utils.log import get_logger
-from hibernation_no1.mmdet.modules.base.initialization.initialize import initialize
+from sub_module.utils.log import get_logger
+from sub_module.mmdet.modules.base.initialization.initialize import initialize
 
 class BaseModule(nn.Module, metaclass=ABCMeta):
     """Base module for all modules in openmmlab.

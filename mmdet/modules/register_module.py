@@ -1,4 +1,4 @@
-from hibernation_no1.mmdet.registry import Registry
+from sub_module.mmdet.registry import Registry
 
 
 

@@ -1,4 +1,4 @@
-from hibernation_no1.mmdet.data.transforms.compose import PIPELINES
+from sub_module.mmdet.data.transforms.compose import PIPELINES
 import numbers
 import cv2
 import numpy as np

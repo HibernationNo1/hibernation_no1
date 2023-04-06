@@ -1,6 +1,6 @@
 build/
 dist/
-hibernation_no1.egg-info/
+submodule.egg-info/
 
 tmp.py
 *.log

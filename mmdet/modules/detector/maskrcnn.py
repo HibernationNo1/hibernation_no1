@@ -1,7 +1,7 @@
 
-from hibernation_no1.mmdet.modules.base.module import BaseModule
-from hibernation_no1.mmdet.registry import build_from_cfg
-from hibernation_no1.mmdet.modules.register_module import BACKBORN, NECK, RPN_HEAD, ROI_HEAD
+from sub_module.mmdet.modules.base.module import BaseModule
+from sub_module.mmdet.registry import build_from_cfg
+from sub_module.mmdet.modules.register_module import BACKBORN, NECK, RPN_HEAD, ROI_HEAD
 
 import torch
 

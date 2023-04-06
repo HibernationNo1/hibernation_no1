@@ -3,9 +3,9 @@ import os, os.path as osp
 import cv2
 import torch
 import warnings
-from hibernation_no1.mmdet.inference import inference_detector, parse_inference_result
-from hibernation_no1.mmdet.visualization import mask_to_polygon, draw_PR_curve, draw_to_img
-from hibernation_no1.mmdet.get_info_algorithm import Get_info
+from sub_module.mmdet.inference import inference_detector, parse_inference_result
+from sub_module.mmdet.visualization import mask_to_polygon, draw_PR_curve, draw_to_img
+from sub_module.mmdet.get_info_algorithm import Get_info
 
 def compute_iou(infer_box, gt_box, confidence_score, img = None):
     """

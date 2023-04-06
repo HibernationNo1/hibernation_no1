@@ -1,7 +1,7 @@
 import torch
 from torch.nn.parallel._functions import _get_stream
 from torch.nn.parallel._functions import Scatter as OrigScatter
-from hibernation_no1.mmdet.data.datacontainer import DataContainer
+from sub_module.mmdet.data.datacontainer import DataContainer
             
 # org : scatter_kwargs            
 def scatter_inputs(inputs, target_gpus = [0], dim=0):

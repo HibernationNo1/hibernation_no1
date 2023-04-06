@@ -4,8 +4,8 @@ import os, os.path as osp
 import numpy as np
 from terminaltables import AsciiTable
 
-from hibernation_no1.mmdet.data.transforms.compose import Compose
-from hibernation_no1.mmdet.data.api.coco import COCO
+from sub_module.mmdet.data.transforms.compose import Compose
+from sub_module.mmdet.data.api.coco import COCO
 
 
 def _build_dataset(dataset_cfg, dataset_api):
