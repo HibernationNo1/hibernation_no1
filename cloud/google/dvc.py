@@ -148,25 +148,20 @@ def dvc_pull(remote: str, bucket_name: str, client_secrets: dict, data_root: str
 
 
 
-def dvc_add(target_dir: str, dvc_name: str):
+def dvc_add(target_dir: str):
     """
 
     Args:
         target_dir (str): directory path where push to dvc
-        dvc_name (str): name of file containing contents about dataset (`.dvc` format)
-
     """
     if platform.system() != "Linux":
         raise OSError(f"This function only for Linux!")
     
+    print(f"\nRun	`$ dvc add {target_dir}`")
     subprocess.call([f"dvc add {target_dir}"], shell=True)
+
     
-    recode_dir = osp.dirname(target_dir)
-    dvc_file  = osp.join(recode_dir, f"{dvc_name}.dvc")
-    gitignore_file = osp.join(recode_dir, ".gitignore")
-    assert osp.isfile(dvc_file) and osp.isfile(gitignore_file),\
-        f"dvc and .gitignore file are not exist!!" \
-        f"\n files list in {recode_dir} {os.listdir(recode_dir)}"
+
         
         
         
