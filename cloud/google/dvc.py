@@ -98,9 +98,9 @@ def set_gs_credentials_dvc(remote: str, bucket_name: str, client_secrets: dict):
     remote_bucket_command = f"dvc remote add -d -f {remote} gs://{bucket_name}"
     credentials_command = f"dvc remote modify --local {remote} credentialpath {client_secrets_path}"     
     
-    print(f"$ {remote_bucket_command}")
+    print(f"Run `$ {remote_bucket_command}`")
     subprocess.call([remote_bucket_command], shell=True)
-    print(f"$ {credentials_command}")
+    print(f"Run `$ {credentials_command}`")
     subprocess.call([credentials_command], shell=True)
     
     check_gs_credentials_dvc(remote)
@@ -131,11 +131,11 @@ def dvc_pull(remote: str, bucket_name: str, client_secrets: dict, data_root: str
     
     # download dataset from GS by dvc 
     dvp_pull_srt = f"dvc pull {data_root}.dvc"
-    print(f"$ {dvp_pull_srt}")
+    print(f"Run `$ {dvp_pull_srt}`")
     subprocess.call([dvp_pull_srt], shell=True)           
     os.remove(client_secrets_path)
     
-    if isdir(data_root):
+    if osp.isdir(data_root):
         dataset_dir_path = data_root
     else:
         dataset_dir_path = osp.join(os.getcwd(), data_root)
@@ -148,25 +148,20 @@ def dvc_pull(remote: str, bucket_name: str, client_secrets: dict, data_root: str
 
 
 
-def dvc_add(target_dir: str, dvc_name: str):
+def dvc_add(target_dir: str):
     """
 
     Args:
         target_dir (str): directory path where push to dvc
-        dvc_name (str): name of file containing contents about dataset (`.dvc` format)
-
     """
     if platform.system() != "Linux":
         raise OSError(f"This function only for Linux!")
     
+    print(f"\nRun	`$ dvc add {target_dir}`")
     subprocess.call([f"dvc add {target_dir}"], shell=True)
+
     
-    recode_dir = osp.dirname(target_dir)
-    dvc_file  = osp.join(recode_dir, f"{dvc_name}.dvc")
-    gitignore_file = osp.join(recode_dir, ".gitignore")
-    assert osp.isfile(dvc_file) and osp.isfile(gitignore_file),\
-        f"dvc and .gitignore file are not exist!!" \
-        f"\n files list in {recode_dir} {os.listdir(recode_dir)}"
+
         
         
         
@@ -181,6 +176,7 @@ def dvc_push(remote: str, bucket_name: str, client_secrets: dict):
     """
     client_secrets_path = set_gs_credentials_dvc(remote, bucket_name, client_secrets)        
         
-    # upload dataset to GS by dvc   
+    # upload dataset to GS by dvc  
+    print(f"Run `$ dvc push`") 
     subprocess.call(["dvc push"], shell=True)          
     os.remove(client_secrets_path)
