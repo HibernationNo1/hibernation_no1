@@ -98,9 +98,9 @@ def set_gs_credentials_dvc(remote: str, bucket_name: str, client_secrets: dict):
     remote_bucket_command = f"dvc remote add -d -f {remote} gs://{bucket_name}"
     credentials_command = f"dvc remote modify --local {remote} credentialpath {client_secrets_path}"     
     
-    print(f"$ {remote_bucket_command}")
+    print(f"Run `$ {remote_bucket_command}`")
     subprocess.call([remote_bucket_command], shell=True)
-    print(f"$ {credentials_command}")
+    print(f"Run `$ {credentials_command}`")
     subprocess.call([credentials_command], shell=True)
     
     check_gs_credentials_dvc(remote)
@@ -131,11 +131,11 @@ def dvc_pull(remote: str, bucket_name: str, client_secrets: dict, data_root: str
     
     # download dataset from GS by dvc 
     dvp_pull_srt = f"dvc pull {data_root}.dvc"
-    print(f"$ {dvp_pull_srt}")
+    print(f"Run `$ {dvp_pull_srt}`")
     subprocess.call([dvp_pull_srt], shell=True)           
     os.remove(client_secrets_path)
     
-    if isdir(data_root):
+    if osp.isdir(data_root):
         dataset_dir_path = data_root
     else:
         dataset_dir_path = osp.join(os.getcwd(), data_root)
