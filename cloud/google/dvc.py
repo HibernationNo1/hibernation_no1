@@ -176,6 +176,7 @@ def dvc_push(remote: str, bucket_name: str, client_secrets: dict):
     """
     client_secrets_path = set_gs_credentials_dvc(remote, bucket_name, client_secrets)        
         
-    # upload dataset to GS by dvc   
+    # upload dataset to GS by dvc  
+    print(f"Run `$ dvc push`") 
     subprocess.call(["dvc push"], shell=True)          
     os.remove(client_secrets_path)
