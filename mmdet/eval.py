@@ -234,7 +234,6 @@ class Evaluate():
             plot_dir = osp.join(self.output_path, self.plot_dir)
             os.makedirs(plot_dir, exist_ok = True)
             self.save_PR_curve(plot_dir)
-
             
         return summary_dict
       
@@ -363,7 +362,7 @@ class Evaluate():
                 
                 if ap_area > 1.0:
                     raise ValueError(f"average precision must low than 1.0! but got {ap_area}."
-									 f"\n stack_area: {stack_area}, dv: {dv}")
+                                     f"\n stack_area: {stack_area}, dv: {dv}")
                 return ap_area
 
             
