@@ -75,7 +75,7 @@ class CustomDataset(Dataset):
         self.dataset_api = dataset_api
         if self.confirm_return([ann_file, pipeline, data_root, img_prefix]):
             self.data_root = data_root if osp.isabs(data_root) else  osp.join(os.getcwd(), data_root) 
-            self.ann_file = ann_file if osp.isabs(ann_file) else  osp.join(self.data_root, ann_file)
+            self.ann_file = ann_file 
             self.img_prefix = img_prefix if osp.isabs(img_prefix) else  osp.join(self.data_root, img_prefix)        
             self.filter_empty_gt = filter_empty_gt
             assert osp.isfile(self.ann_file), f"The file: {self.ann_file} dose not exist."

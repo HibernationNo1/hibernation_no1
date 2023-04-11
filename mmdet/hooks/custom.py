@@ -1,10 +1,14 @@
 import os, os.path as osp
 import time
+import logging
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 from sub_module.mmdet.hooks.hook import Hook, HOOK
 from sub_module.mmdet.eval import Evaluate
-from torch.utils.tensorboard import SummaryWriter
+
+
+
 
 @HOOK.register_module()
 class Validation_Hook(Hook):
@@ -29,6 +33,11 @@ class Validation_Hook(Hook):
         log_file = osp.join(os.getcwd(), "test.log")
 
         self.logger = logger
+      
+        if self.kwargs.get('best_model', None) is not None:
+            self.get_best_model = True
+            self.save_best_model(init = True)
+        else: self.get_best_model = False
   
 
     def every_n_inner_iters(self):
@@ -53,7 +62,62 @@ class Validation_Hook(Hook):
                 result = self.validation(runner)
                 runner.val_result.append(result)
                     
+    
+    def save_best_model(self, result: dict = None, runner = None, init = False):
+        if init:
+            best_model_cfg = self.kwargs.get('best_model')
+            self.keyword = best_model_cfg.key
+            self.model_path = osp.join(best_model_cfg.get('dir', 'best'),
+                                       best_model_cfg.get('name', "model.pth"))
+            self.logfile_name = best_model_cfg.get("log", f"{time.strftime('%Y_%m_%d_%H_%M_%S')}.log")
+       
+            self.best_value = -1
+            return None
         
+        if result is None or runner is None: return None
+        
+        # Check if the directory path to save exists.
+        
+        
+        if not hasattr(self, "best_model_dir"):
+            if hasattr(runner, "dir_to_save"):
+                output_path = runner.dir_to_save
+            else:
+                output_path = self.result_dir
+            
+            if output_path is None: return None
+            self.best_model_dir = osp.join(osp.dirname(output_path), osp.dirname(self.model_path))
+            os.makedirs(self.best_model_dir, exist_ok = True)
+            
+            self.best_model_logger = logging.getLogger("best_model_save_logger")
+            self.best_model_logger.setLevel(logging.INFO)
+            file_handler = logging.FileHandler(osp.join(self.best_model_dir, self.logfile_name), mode="a")
+            file_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+            self.best_model_logger.addHandler(file_handler)
+            
+            stream_handler = logging.StreamHandler()
+            stream_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+            self.best_model_logger.addHandler(stream_handler)
+
+        
+    
+        value_keyword = result[f'{self.keyword}']
+        
+        if self.best_value >= value_keyword: return None
+        self.best_value = value_keyword
+        
+        self.best_model_logger.info(f"  Save best model to {self.best_model_dir}/{osp.basename(self.model_path)}")
+        self.best_model_logger.info(f"  Epoch [{result['epoch']}]{result['inner_iter']}")
+        self.best_model_logger.info(f"  Keyword: {self.keyword}, Value: {value_keyword}\n")
+       
+        save_cfg = dict(out_dir = self.best_model_dir,
+                        filename_tmpl = osp.basename(self.model_path),
+                        save_optimizer = True,
+                        val_mode = True)
+        runner.save_checkpoint(**save_cfg)
+        
+        
+    
     def validation(self, runner):
         model = runner.model
         model.eval()
@@ -62,7 +126,7 @@ class Validation_Hook(Hook):
         if hasattr(runner, "dir_to_save"):
             output_path = runner.dir_to_save
         else:
-            output_path = None
+            output_path = self.result_dir
         eval_cfg = dict(model= runner.model, 
                         cfg= self.val_cfg,
                         dataloader= self.val_dataloader,
@@ -83,19 +147,22 @@ class Validation_Hook(Hook):
         if log_dict_loss.get("time", None) is not None: del log_dict_loss['time']
 
         result = dict(epoch = runner.epoch, 
-                      inner_iter = runner.inner_iter, 
+                      inner_iter = f"[{runner.inner_iter}/{runner._iterd_per_epochs}]",
                       mAP = summary['normal']['mAP'],
                       dv_mAP = summary['dv']['mAP'],
                       **log_dict_loss)
         
-
+        if self.get_best_model:
+            self.save_best_model(result = result, runner = runner)
+            
+            
         log_str = ""
         for key, item in result.items():
             if key == "epoch":
                 log_str +=f"EPOCH [{item}]"
                 continue
             elif key == "inner_iter":
-                log_str +=f"[{item}/{runner._iterd_per_epochs}]     "
+                log_str +=f"{item}     "
                 log_str +=f"\n>>   "
                 continue                
             if type(item) == float:
@@ -112,7 +179,10 @@ class Validation_Hook(Hook):
         if self.logger is not None:
             self.logger.info(log_str)
         else: print(log_str)   
-       
+    
+        
+            
+            
         return result
 
 

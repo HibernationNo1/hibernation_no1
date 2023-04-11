@@ -6,7 +6,7 @@ import re
 from dvc.config import Config
 
 
-def get_dvc_config(default_remote: str):
+def get_dvc_config(default_remote: str, dvc_path: str):
     """convert dvc 'config' file content to dict
     
     Args:
@@ -15,7 +15,11 @@ def get_dvc_config(default_remote: str):
     Returns:
         dict: dvc 'config' file content expressed as a dict
     """
-    dvc_config_path = osp.join(Config().dvc_dir, "config")
+    if Config().dvc_dir is not None:
+        dvc_config_path = osp.join(Config().dvc_dir, "config")
+    else:
+        dvc_config_path = osp.join(dvc_path, "config")    
+    
     with open(dvc_config_path, "r") as dvc_config:
         # in here, will be erased all contents of 'dvc_config'
         assert len(list(dvc_config)) > 2,  "No remote configuration!  run 'remote add'!"
@@ -67,21 +71,33 @@ def get_dvc_config(default_remote: str):
     return dvc_cfg
 
 
-def check_gs_credentials_dvc(remote):
+def check_gs_credentials_dvc(remote, dvc_path):
     """_summary_
 
     Args:
         remote (_type_): _description_
     """
-    dvc_cfg = get_dvc_config(remote)
-    credentials = osp.join(os.getcwd(), ".dvc", "config.local")
+    dvc_cfg = get_dvc_config(remote, dvc_path)
+    credentials = osp.join(dvc_path, "config.local")
     assert osp.isfile(credentials), f"\n  >> Path: {credentials} is not exist!!   "\
         f"set google storage credentials! "\
         f"\n  >> run:   $ dvc remote modify --local {dvc_cfg['defualt_remote']} credentialpath `client_secrets_path`"
+
+
+def run_dvc_command(command, dvc_path):
+    org_chdir = None
+    if dvc_path != osp.join(os.getcwd(), ".dvc"):
+        org_chdir = os.getcwd()
+        os.chdir(osp.dirname(dvc_path))
     
+    print(f"Run `$ {command}`")
+    subprocess.call([command], shell=True)
+    
+    if org_chdir is not None:
+        os.chdir(org_chdir)
 
 
-def set_gs_credentials_dvc(remote: str, bucket_name: str, client_secrets: dict):    
+def set_gs_credentials_dvc(remote: str, bucket_name: str, client_secrets: dict, dvc_path: str):    
     """ access google cloud with credentials
 
     Args:
@@ -95,20 +111,15 @@ def set_gs_credentials_dvc(remote: str, bucket_name: str, client_secrets: dict):
     client_secrets_path = osp.join(os.getcwd(), "client_secrets.json")
     json.dump(client_secrets, open(client_secrets_path, "w"), indent=4)
     
-    remote_bucket_command = f"dvc remote add -d -f {remote} gs://{bucket_name}"
-    credentials_command = f"dvc remote modify --local {remote} credentialpath {client_secrets_path}"     
-    
-    print(f"Run `$ {remote_bucket_command}`")
-    subprocess.call([remote_bucket_command], shell=True)
-    print(f"Run `$ {credentials_command}`")
-    subprocess.call([credentials_command], shell=True)
-    
-    check_gs_credentials_dvc(remote)
+    run_dvc_command(f"dvc remote add -d -f {remote} gs://{bucket_name}", dvc_path)
+    run_dvc_command(f"dvc remote modify --local {remote} credentialpath {client_secrets_path}", dvc_path)
+         
+    check_gs_credentials_dvc(remote, dvc_path)
     
     return client_secrets_path
 
 
-def dvc_pull(remote: str, bucket_name: str, client_secrets: dict, data_root: str):
+def dvc_pull(remote: str, bucket_name: str, client_secrets: dict, data_root: str, dvc_path = osp.join(os.getcwd(), ".dvc")):
     """ run dvc pull from google cloud storage
 
     Args:
@@ -124,15 +135,13 @@ def dvc_pull(remote: str, bucket_name: str, client_secrets: dict, data_root: str
         raise OSError(f"This function only for Linux!")
     
     # check file exist (downloaded from git repo by git clone)
-    dvc_path = osp.join(os.getcwd(), f'{data_root}.dvc')          
-    assert osp.isfile(dvc_path), f"Path: {dvc_path} is not exist!" 
+    dvc_file_path = f'{data_root}.dvc'          
+    assert osp.isfile(dvc_file_path), f"Path: {dvc_file_path} is not exist!" 
 
-    client_secrets_path = set_gs_credentials_dvc(remote, bucket_name, client_secrets)
+    client_secrets_path = set_gs_credentials_dvc(remote, bucket_name, client_secrets, dvc_path)
     
     # download dataset from GS by dvc 
-    dvp_pull_srt = f"dvc pull {data_root}.dvc"
-    print(f"Run `$ {dvp_pull_srt}`")
-    subprocess.call([dvp_pull_srt], shell=True)           
+    run_dvc_command(f"dvc pull {data_root}.dvc", dvc_path)     
     os.remove(client_secrets_path)
     
     if osp.isdir(data_root):
@@ -165,7 +174,7 @@ def dvc_add(target_dir: str):
         
         
         
-def dvc_push(remote: str, bucket_name: str, client_secrets: dict):
+def dvc_push(remote: str, bucket_name: str, client_secrets: dict, dvc_path = osp.join(os.getcwd(), ".dvc")):
     """
 
     Args:
@@ -174,7 +183,7 @@ def dvc_push(remote: str, bucket_name: str, client_secrets: dict):
         client_secrets (dict): credentials info to access google storage
         
     """
-    client_secrets_path = set_gs_credentials_dvc(remote, bucket_name, client_secrets)        
+    client_secrets_path = set_gs_credentials_dvc(remote, bucket_name, client_secrets, dvc_path)        
         
     # upload dataset to GS by dvc  
     print(f"Run `$ dvc push`") 
