@@ -171,8 +171,6 @@ class LoggerHook(Hook):
         log_str +='\n'
         
         runner.logger.info(log_str)
-
-        
         
     def write_log(self, status, log_):    
         # dump log in .log format

@@ -22,7 +22,7 @@ def build_detector(cfg, model_path, device='cuda:0', logger = None):
     elif cfg.get('model', None) is not None:
         model_cfg = cfg.model
     else: 
-        raise TypeError(f"There is no config for build model.")
+        raise TypeError(f"There is no config to build model.")
 
     # TODO : build with registry
     if model_cfg.type == 'MaskRCNN':
@@ -92,8 +92,6 @@ def load_state_dict(model: torch.nn.Module, state_dict, device = 'cuda:0',  logg
     model.to(device)
     model.eval()
     return model
-    
-
 
 def inference_detector(model, imgs_path, **kwargs):
     """Inference image(s) with the detector.
@@ -160,6 +158,8 @@ def inference_detector(model, imgs_path, **kwargs):
         results = model(return_loss=False, rescale=True, **data)        # call model.forward
     
     torch.cuda.empty_cache()  
+
+    
     
     if not is_batch:
         return results[0]
@@ -167,19 +167,17 @@ def inference_detector(model, imgs_path, **kwargs):
         return results
 
 
-def parse_inference_result(result):
+def parse_inference_result(result):   
     if isinstance(result, tuple):
         bbox_result, segm_result = result
         if isinstance(segm_result, tuple): 
             segm_result = segm_result[0]  # ms rcnn
     else:
         bbox_result, segm_result = result, None
-
     
     # bboxes.shape: (num of instance, 5)    5: [x_min, y_min, x_max, y_max, score]
-    bboxes = np.vstack(bbox_result)
+    bboxes = np.vstack(bbox_result)    
     
-  
     labels = [
         np.full(bbox.shape[0], i, dtype=np.int32)
         for i, bbox in enumerate(bbox_result)
@@ -198,5 +196,5 @@ def parse_inference_result(result):
             segms = torch.stack(segms, dim=0).detach().cpu().numpy()
         else:
             segms = np.stack(segms, axis=0)         
-        
+    
     return bboxes, labels, segms
