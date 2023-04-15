@@ -7,9 +7,6 @@ from torch.utils.tensorboard import SummaryWriter
 from sub_module.mmdet.hooks.hook import Hook, HOOK
 from sub_module.mmdet.eval import Evaluate
 
-
-
-
 @HOOK.register_module()
 class Validation_Hook(Hook):
     def __init__(self,
@@ -51,8 +48,7 @@ class Validation_Hook(Hook):
                 self.every_n_inner_iters():
                 
                 result = self.validation(runner)
-                runner.val_result.append(result)
-        
+                runner.val_result.append(result)           
     
     def after_train_epoch(self, runner) -> None: 
         if self.run_val: 
@@ -61,9 +57,12 @@ class Validation_Hook(Hook):
                 
                 result = self.validation(runner)
                 runner.val_result.append(result)
-                    
     
     def save_best_model(self, result: dict = None, runner = None, init = False):
+        model_cfg = self.kwargs.get('model_cfg', None)
+        if model_cfg is None: 
+            raise KeyError(f"Must need `model_cfg` to save model, but got None.")
+        
         if init:
             best_model_cfg = self.kwargs.get('best_model')
             self.keyword = best_model_cfg.key
@@ -113,11 +112,11 @@ class Validation_Hook(Hook):
         save_cfg = dict(out_dir = self.best_model_dir,
                         filename_tmpl = osp.basename(self.model_path),
                         save_optimizer = True,
+                        model_cfg = model_cfg,
                         val_mode = True)
         runner.save_checkpoint(**save_cfg)
         
         
-    
     def validation(self, runner):
         model = runner.model
         model.eval()
@@ -133,8 +132,8 @@ class Validation_Hook(Hook):
                         get_memory_info = self.get_memory_info,
                         output_path = output_path)  
         
-        eval_ = Evaluate(**eval_cfg)   
-        summary = eval_.compute_mAP()
+        eval_ = Evaluate(**eval_cfg) 
+        summary = eval_.get_mAP()  
 
         if self.run_infer:
             correct_inference_rate = eval_.run_inference()
@@ -179,10 +178,7 @@ class Validation_Hook(Hook):
         if self.logger is not None:
             self.logger.info(log_str)
         else: print(log_str)   
-    
-        
-            
-            
+
         return result
 
 
