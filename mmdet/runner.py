@@ -395,14 +395,16 @@ class Runner:
                     iter=self._iter)
         
         # set dir to save
-        if not val_mode:    # During training 
+        if val_mode:    # During validation to save best model 
+            dir_to_save = out_dir 
+            filename = filename_tmpl
+            
+        else:           # During training   
             filename = filename_tmpl.format(self._epoch)
             dir_to_save = osp.join(out_dir, filename.split(".")[0])
             os.makedirs(dir_to_save, exist_ok = True)
             self.dir_to_save = dir_to_save
-        else:               # During validation to save best model
-            dir_to_save = out_dir 
-            filename = filename_tmpl
+            
         filepath = osp.join(dir_to_save, filename)
         optimizer = self.optimizer if save_optimizer else None
         

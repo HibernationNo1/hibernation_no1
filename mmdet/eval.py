@@ -1,4 +1,5 @@
 import numpy as np
+import math
 import os, os.path as osp
 import cv2
 import torch
@@ -6,6 +7,7 @@ import warnings
 from sub_module.mmdet.inference import inference_detector, parse_inference_result
 from sub_module.mmdet.visualization import mask_to_polygon, draw_PR_curve, draw_to_img
 from sub_module.mmdet.get_info_algorithm import Get_info
+
 
 def compute_iou(infer_box, gt_box, confidence_score, img = None):
     """
@@ -160,8 +162,6 @@ class Evaluate():
         self.img_result_dir = "images"
 
         self.set_treshold()
-        
-        self.get_precision_recall_value()
 
     def set_treshold(self):
         num_thrshd_divi = self.cfg.num_thrs_divi
@@ -432,9 +432,11 @@ class Evaluate():
                                                     dv_PR_list = dv_PR_list)
 
 
-    def get_precision_recall_value(self):
+    def get_mAP(self):
+        dataloader = self.dataloader
         gt_classes = dict()
-        for i, val_data_batch in enumerate(self.dataloader):
+        for i, val_data_batch in enumerate(dataloader):
+
             # len(batch_gt_labels): batch_size
             batch_gt_bboxes = val_data_batch['gt_bboxes'].data[0]
             batch_gt_labels = val_data_batch['gt_labels'].data[0]
@@ -447,8 +449,8 @@ class Evaluate():
                     else:
                         gt_classes[self.classes[gt_label]] +=1
 
-                batch_gts.append([gt_bboxes, gt_labels, gt_masks]) 
-            
+                batch_gts.append((gt_bboxes, gt_labels, gt_masks)) 
+
             # Define `self.confusion_matrix``
             if i == 0:
                 for class_name in self.classes:
@@ -466,19 +468,19 @@ class Evaluate():
             batch_filepath = []
             for img_meta in val_data_batch['img_metas'].data[0]:
                 batch_filepath.append(img_meta['file_path'])
-
+            
             with torch.no_grad():
             # len: batch_size
                 inference_detector_cfg = dict(model = self.model, 
                                               imgs_path = batch_filepath, 
                                               get_memory_info = self.kwargs.get('get_memory_info', None))
-                batch_results = inference_detector(**inference_detector_cfg)  
+                batch_results = inference_detector(**inference_detector_cfg) 
 
             for results, ground_truths, file_path in zip(batch_results, batch_gts, batch_filepath):
-                self.get_confusion_value(ground_truths, results, file_path)        
-
-
+                self.get_confusion_value(ground_truths, results, file_path)  
+                
         self.compute_precision_recall()
+        return self.compute_mAP()
     
 
 
@@ -600,7 +602,8 @@ class Evaluate():
             os.makedirs(img_result_dir, exist_ok = True)
         else: return None
 
-        for i, val_data_batch in enumerate(self.dataloader):
+        dataloader = self.dataloader
+        for i, val_data_batch in enumerate(dataloader):
             # len(batch_gt_bboxes): batch_size 
             batch_gt_bboxes = val_data_batch['gt_bboxes'].data[0]
             batch_gt_labels = val_data_batch['gt_labels'].data[0]
@@ -612,7 +615,7 @@ class Evaluate():
                     gt_bboxe.append(100.)
                     gt_bboxes_scores.append(gt_bboxe)
                 
-                batch_gts.append([np.array(gt_bboxes_scores), gt_labels.numpy()])
+                batch_gts.append((np.array(gt_bboxes_scores), gt_labels.numpy()))
             
             batch_filepath = []
             for img_meta in val_data_batch['img_metas'].data[0]:
@@ -625,10 +628,14 @@ class Evaluate():
                                               get_memory_info = self.kwargs.get('get_memory_info', None))
                 batch_results = inference_detector(**inference_detector_cfg)  
 
+            total_matchs_count = total_num_board_gt = 0
+            no_mask = False
             for filepath, results, ground_truths in zip(batch_filepath, batch_results, batch_gts):
                 bboxes, labels, masks = parse_inference_result(results) 
 
-                if masks is None: continue      # When nothing is detected: continue
+                if masks is None: 
+                    no_mask = True
+                    continue      # When nothing is detected: continue
 
                 # Save the image with the inference result drawn
                 img = cv2.imread(filepath)
@@ -647,12 +654,14 @@ class Evaluate():
                 # by comparing the ground truth and the inference results.
                 if self.cfg.get('compare_board_info', False): 
                     bboxes_gt, labels_gt = ground_truths 
-                    correct_inference_rate = self.compare_board_info(bboxes, labels, bboxes_gt, labels_gt, 
+                    matchs_count, num_board_gt = self.compare_board_info(bboxes, labels, bboxes_gt, labels_gt, 
                                                                      filepath = filepath)
-                    return correct_inference_rate
-                else: 
-                    return None
-            return None
+                    total_matchs_count += matchs_count
+                    total_num_board_gt += num_board_gt
+
+            if no_mask:
+                return 0.0
+            return total_matchs_count/total_num_board_gt
 
 
     
@@ -668,13 +677,13 @@ class Evaluate():
                                score_thr = self.cfg.get('show_score_thr', 0.5))
         license_board_gt_list = get_info_gt.get_board_info(infer = False)
         
-        if len(license_board_infer_list) == 0: return 0.0
-
         num_board_gt = len(license_board_gt_list)
         if num_board_gt == 0:
-            license_board_gt_list = get_info_gt.get_board_info(infer = False, check = True)
+            _ = get_info_gt.get_board_info(infer = False, check = True)
             raise ValueError(f"The GT image is not suitable for performing `compare_board_info`."
                             f"\nPlease check the validation image.  \n file_path: {filepath}")
+              
+        if len(license_board_infer_list) == 0: return 0.0, num_board_gt
      
         matchs_count = 0
         for info_gt in license_board_gt_list:
@@ -695,6 +704,6 @@ class Evaluate():
                        length_btw_board < board_height_p_gt * distance_thr_rate*2:
                        matchs_count+=1
         
-        return matchs_count/num_board_gt
+        return matchs_count, num_board_gt
 
                 

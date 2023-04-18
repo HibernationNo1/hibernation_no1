@@ -5,7 +5,6 @@ from sub_module.mmdet.modules.register_module import BACKBORN, NECK, RPN_HEAD, R
 
 import torch
 
-
 class MaskRCNN(BaseModule):
     def __init__(self,
                  backbone,
@@ -38,7 +37,8 @@ class MaskRCNN(BaseModule):
             return self.forward_train(img, img_metas, **kwargs)
         else:
             return self.forward_test(img, img_metas, **kwargs)  
-        
+    
+
     def forward_test(self, imgs, img_metas, **kwargs):
         """
         Args:
@@ -49,6 +49,7 @@ class MaskRCNN(BaseModule):
                 augs (multiscale, flip, etc.) and the inner list indicates
                 images in a batch.
         """
+        
         
         for var, name in [(imgs, 'imgs'), (img_metas, 'img_metas')]:
             if not isinstance(var, list):
@@ -86,12 +87,12 @@ class MaskRCNN(BaseModule):
                 # len: batch_size
                 proposal_list = self.rpn_head.simple_test_rpn(x, img_meta)
             else:
-                proposal_list = kwargs['proposals']
-        
+                proposal_list = kwargs['proposals']  
+
             # len: batch_size
             # result[n].size: (6, 6)
-            results = self.roi_head.simple_test(x, proposal_list, img_meta, rescale=kwargs.get("rescale", False))           
-            
+            results = self.roi_head.simple_test(x, proposal_list, img_meta, rescale=kwargs.get("rescale", False))               
+        
             return results
         
         else:   # TODO
