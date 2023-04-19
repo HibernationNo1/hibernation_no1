@@ -187,15 +187,14 @@ class Runner:
       
                 
     def train(self, train_dataloader, **kwargs):
-        self.model.train()
         self.train_dataloader = train_dataloader
+        self.model.train()
         self.call_hook('before_train_epoch')
         time.sleep(2)  # Prevent possible deadlock during epoch transition
         
-        for i, data_batch in enumerate(self.train_dataloader):
+        for i, data_batch in enumerate(train_dataloader):
             # data_batch: data of passed by pipelines in dataset and collate train_dataloader
-            # data_batch.keys() = ['img_metas', 'img', 'gt_bboxes', 'gt_labels', 'gt_masks']
-            self.data_batch = data_batch        
+            # data_batch.keys() = ['img_metas', 'img', 'gt_bboxes', 'gt_labels', 'gt_masks']    
             self._inner_iter = i+1
 
             self.call_hook('before_train_iter')
@@ -203,7 +202,7 @@ class Runner:
             #   loss:total loss, log_vars: log_vars, num_samples: batch_size
 
             self.run_iter(data_batch)
-            del self.data_batch         # delete training data for preventing memory leaks
+            del data_batch         # delete training data for preventing memory leaks
   
             self.call_hook('after_train_iter')
 

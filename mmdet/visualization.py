@@ -200,7 +200,7 @@ def draw_PR_curve(output_path, class_name, PR_list, ap_area, dv_flag = False, sh
     precision_list, recall_list = [], []
     fig, ax = plt.subplots(figsize = (10, 5))
     for PR in PR_list:
-        precision, recall, _ = PR
+        _, precision, recall = PR
         precision_list.append(precision)
         recall_list.append(recall)
     

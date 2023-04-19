@@ -119,16 +119,16 @@ class Validation_Hook(Hook):
         
     def validation(self, runner):
         model = runner.model
-        model.eval()
+        val_dataloader = self.val_dataloader
         
         # Check if the directory path to save exists.
         if hasattr(runner, "dir_to_save"):
             output_path = runner.dir_to_save
         else:
             output_path = self.result_dir
-        eval_cfg = dict(model= runner.model, 
+        eval_cfg = dict(model= model, 
                         cfg= self.val_cfg,
-                        dataloader= self.val_dataloader,
+                        dataloader= val_dataloader,
                         get_memory_info = self.get_memory_info,
                         output_path = output_path)  
         
@@ -333,7 +333,6 @@ class Check_Hook(Hook):
         GPU_used = memory['GPU']['used']
         GPU_allocated_tensor = memory['GPU']['allocated_tensor']
         GPU_leakage = memory['GPU']['leakage']
-        # TODO: what is GPU_leakage?
         
   
                 
@@ -343,7 +342,7 @@ class Check_Hook(Hook):
         RAM_memory_usage = float(memory['RAM']['percent'].split("%")[0])
         GPU_memory_usage = float(memory['GPU']['percent'].split("%")[0])
         
-        if RAM_memory_usage > 93:   
-            raise OSerror(f"Memory resource usage: {RAM_memory_usage}% , process terminate!!")
+        if RAM_memory_usage > 90:   
+            raise OSError(f"Memory resource usage: {RAM_memory_usage}% , process terminate!!")
                     
        
