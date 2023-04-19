@@ -142,16 +142,7 @@ class Evaluate():
         # assign `num_gt` value in confusion_matrix
         dataloader = self.dataloader
         gt_classes = dict()
-        
-        import psutil
-
-        # 현재 RAM 사용량을 퍼센트로 확인
-        memory_usage = psutil.virtual_memory().percent
-        print(f"\n create_confusion_matrix Current memory usage: {memory_usage}%")
-        
         for i, val_data_batch in enumerate(dataloader):
-            memory_usage = psutil.virtual_memory().percent
-            print(f"{i}{i} Current memory usage: {memory_usage}%")
         
             # len(batch_gt_labels): batch_size
             batch_gt_bboxes = val_data_batch['gt_bboxes'].data[0]
@@ -428,19 +419,7 @@ class Evaluate():
     def get_mAP(self):  
         model = self.model
         dataloader = self.dataloader
-        import psutil
-
-        # 현재 RAM 사용량을 퍼센트로 확인
-        memory_usage = psutil.virtual_memory().percent
-        print(f"\n get_mAP Current memory usage: {memory_usage}%")
-        
         for i, val_data_batch in enumerate(dataloader):     
-            import psutil
-
-            # 현재 RAM 사용량을 퍼센트로 확인
-            memory_usage = psutil.virtual_memory().percent
-            print(f"{i}{i} Current memory usage: {memory_usage}%")    
-            # len(batch_gt_labels): batch_size
             batch_gt_bboxes = val_data_batch['gt_bboxes'].data[0]
             batch_gt_labels = val_data_batch['gt_labels'].data[0]
             batch_gt_masks = val_data_batch['gt_masks'].data[0]
