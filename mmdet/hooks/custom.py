@@ -48,6 +48,8 @@ class Validation_Hook(Hook):
                 self.every_n_inner_iters():
                 
                 result = self.validation(runner)
+                if result is None: 
+                    print(f"Memory usage is over. Validation is canceled")
                 runner.val_result.append(result)           
     
     def after_train_epoch(self, runner) -> None: 
@@ -56,6 +58,8 @@ class Validation_Hook(Hook):
                 self.every_n_epochs(runner, self.val_timing):
                 
                 result = self.validation(runner)
+                if result is None: 
+                    print(f"Memory usage is over. Validation is canceled")
                 runner.val_result.append(result)
     
     def save_best_model(self, result: dict = None, runner = None, init = False):
@@ -134,6 +138,7 @@ class Validation_Hook(Hook):
         
         eval_ = Evaluate(**eval_cfg) 
         summary = eval_.get_mAP()  
+        if summary is None: return None
 
         if self.run_infer:
             correct_inference_rate = eval_.run_inference()
