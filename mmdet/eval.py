@@ -4,6 +4,7 @@ import os, os.path as osp
 import cv2
 import torch
 import warnings
+import psutil
 from sub_module.mmdet.inference import inference_detector, parse_inference_result
 from sub_module.mmdet.visualization import mask_to_polygon, draw_PR_curve, draw_to_img
 from sub_module.mmdet.get_info_algorithm import Get_info
@@ -116,7 +117,13 @@ class Evaluate():
 
         self.set_treshold()
         self.create_confusion_matrix()
-        
+    
+    def check_memory_usage(self):
+        memory_usage = psutil.virtual_memory().percent
+        if memory_usage > 90:
+            print(f"Current memory usage: {memory_usage}%, Stop evaluation.")
+            return False
+        return True    
                 
     def set_treshold(self):
         num_thrshd_divi = self.cfg.num_thrs_divi
@@ -420,6 +427,7 @@ class Evaluate():
         model = self.model
         dataloader = self.dataloader
         for i, val_data_batch in enumerate(dataloader):    
+            if not self.check_memory_usage: return None
                  
             batch_gt_bboxes = val_data_batch['gt_bboxes'].data[0]
             batch_gt_labels = val_data_batch['gt_labels'].data[0]
@@ -578,6 +586,8 @@ class Evaluate():
         dataloader = self.dataloader
         model = self.model
         for i, val_data_batch in enumerate(dataloader):
+            if not self.check_memory_usage: return None
+            
             # len(batch_gt_bboxes): batch_size 
             batch_gt_bboxes = val_data_batch['gt_bboxes'].data[0]
             batch_gt_labels = val_data_batch['gt_labels'].data[0]
