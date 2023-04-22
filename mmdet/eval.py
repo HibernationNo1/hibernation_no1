@@ -658,11 +658,11 @@ class Evaluate():
         get_info_gt = Get_info(bboxes_gt, labels_gt,
                                self.classes.copy(), 
                                score_thr = self.cfg.get('show_score_thr', 0.5))
-        license_board_gt_list = get_info_gt.get_board_info(infer = False)
+        license_board_gt_list = get_info_gt.get_board_info()
         
         num_board_gt = len(license_board_gt_list)
         if num_board_gt == 0:
-            _ = get_info_gt.get_board_info(infer = False, check = True)
+            _ = get_info_gt.get_board_info(check = True)
             raise ValueError(f"The GT image is not suitable for performing `compare_board_info`."
                             f"\nPlease check the validation image.  \n file_path: {filepath}")
               
