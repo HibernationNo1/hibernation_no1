@@ -143,7 +143,7 @@ class Validation_Hook(Hook):
         if self.run_infer:
             correct_inference_rate = eval_.run_inference()
             if correct_inference_rate is not None:
-                summary['correct_inference_rate'] = correct_inference_rate
+                summary['EIR'] = correct_inference_rate
         
         model.train()
         log_dict_loss = dict(**runner.log_buffer.get_last())        
@@ -154,11 +154,16 @@ class Validation_Hook(Hook):
                       inner_iter = f"[{runner.inner_iter}/{runner._iterd_per_epochs}]",
                       mAP = summary['normal']['mAP'],
                       dv_mAP = summary['dv']['mAP'],
+                      EIR = summary.get('EIR', None),
                       **log_dict_loss)
         
         if self.get_best_model:
             self.save_best_model(result = result, runner = runner)
-            
+        
+        if result['EIR'] is not None:
+            last_key = 'EIR'
+        else:
+            last_key = 'dv_mAP'
             
         log_str = ""
         for key, item in result.items():
@@ -171,9 +176,11 @@ class Validation_Hook(Hook):
                 continue                
             if type(item) == float:
                 item = round(item, 4)
-            log_str +=f"{key}={item} ,     "
-            if key == "dv_mAP":
+                log_str +=f"{key}={item} ,     "
+            
+            if key == last_key:
                 log_str +=f"\n>>   "
+
                     
         log_str +=f"\n>>   "
         datatime = self.compute_sec_to_h_d(time.time() - runner.start_time)
