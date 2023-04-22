@@ -48,41 +48,41 @@ class Get_info():
             self.bboxes_list.append(bbox_int)
             self.labels_list.append(self.classes[label])
 
-    def get_board_info(self, infer = True, check =False):
+    def get_board_info(self, check =False):
         board_type = ['r_board', 'l_board']
         number_box = ['r_m_n', 'r_s_n', 'l_m_n', 'l_s_n']
 
-        self.board_idx_list, self.number_box_idx_list, self.text_idx_list = [], [], []
+        board_idx_list, number_box_idx_list, text_idx_list = [], [], []
         for i, b_l in enumerate(zip(self.bboxes_list, self.labels_list)):
             bbox, label = b_l
 
             if label in board_type:
-                self.board_idx_list.append(i)
+                board_idx_list.append(i)
             elif label in number_box:
-                self.number_box_idx_list.append(i)
+                number_box_idx_list.append(i)
             else:
-                self.text_idx_list.append(i)
+                text_idx_list.append(i)
 
-        return self.get_numberboard_info(check)
+        return self.get_numberboard_info(board_idx_list, number_box_idx_list, text_idx_list, check = False)
 
 
-    def get_numberboard_info(self, check = False):   
+    def get_numberboard_info(self, board_idx_list, number_box_idx_list, text_idx_list, check = False):   
         # `check` is for checking gt data
         number_board_list = []
-        for board_idx in self.board_idx_list:
+        for board_idx in board_idx_list:
             board_bbox = self.bboxes_list[board_idx]
             board_dict = dict(type = self.labels_list[board_idx],
                               board_center_p = self.compute_center_point(board_bbox),
                               width = self.compute_width_height(board_bbox)[0],
                               height = self.compute_width_height(board_bbox)[1])
 
-            for number_box_idx in self.number_box_idx_list:
+            for number_box_idx in number_box_idx_list:
                 number_box_bbox = self.bboxes_list[number_box_idx]
         
                 if self.check_in_bbox(board_bbox, number_box_bbox):
                     
                     text_list = []
-                    for text_idx in self.text_idx_list:
+                    for text_idx in text_idx_list:
                         text_bbox = self.bboxes_list[text_idx]
                         # Check if text is located inside the number_box_bbox
                         if self.check_in_bbox(number_box_bbox, text_bbox):
@@ -90,20 +90,23 @@ class Get_info():
                             text_list.append([text_bbox, self.labels_list[text_idx], x_center])
 
                     if self.labels_list[number_box_idx] in ['l_s_n', 'r_s_n']:     
+                        text_list.sort(key =lambda x: x[-1])
                         if check:
                             print(f"check sub_text")
                             for text in text_list:
-                                print(f"{text[1]}")
+                                print(f"{text}")
 
                         if len(text_list) !=3: continue  
                         if text_list[-1][1].isdigit(): continue
+                        
                         board_dict['sub_text'] = [i[1] for i in text_list]
 
                     elif self.labels_list[number_box_idx] in ['l_m_n', 'r_m_n']:
+                        text_list.sort(key =lambda x: x[-1])
                         if check:
                             print(f"check main_text")
                             for text in text_list:
-                                print(f"{text[1]}")
+                                print(f"{text}")
                     
                         if len(text_list) !=4: continue 
                         isdigit = True
