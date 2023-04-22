@@ -585,12 +585,13 @@ class Evaluate():
 
         dataloader = self.dataloader
         model = self.model
+        total_matchs_count = total_num_board_gt = 0
         for i, val_data_batch in enumerate(dataloader):
             if not self.check_memory_usage: return None
-            
             # len(batch_gt_bboxes): batch_size 
             batch_gt_bboxes = val_data_batch['gt_bboxes'].data[0]
             batch_gt_labels = val_data_batch['gt_labels'].data[0]
+            
             batch_gts = []
             for gt_bboxes, gt_labels in zip(batch_gt_bboxes, batch_gt_labels):
                 # append score
@@ -611,7 +612,6 @@ class Evaluate():
                                               imgs_path = batch_filepath)
                 batch_results = inference_detector(**inference_detector_cfg)  
 
-            total_matchs_count = total_num_board_gt = 0
             no_mask = False
             for filepath, results, ground_truths in zip(batch_filepath, batch_results, batch_gts):
                 bboxes, labels, masks = parse_inference_result(results) 
@@ -642,9 +642,9 @@ class Evaluate():
                     total_matchs_count += matchs_count
                     total_num_board_gt += num_board_gt
 
-            if no_mask:
-                return 0.0
-            return total_matchs_count/total_num_board_gt
+        if no_mask:
+            return 0.0
+        return total_matchs_count/total_num_board_gt
 
 
     
