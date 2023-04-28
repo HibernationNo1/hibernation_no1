@@ -4,6 +4,7 @@ import os, os.path as osp
 import cv2
 import torch
 import warnings
+import psutil
 from sub_module.mmdet.inference import inference_detector, parse_inference_result
 from sub_module.mmdet.visualization import mask_to_polygon, draw_PR_curve, draw_to_img
 from sub_module.mmdet.get_info_algorithm import Get_info
@@ -116,7 +117,13 @@ class Evaluate():
 
         self.set_treshold()
         self.create_confusion_matrix()
-        
+    
+    def check_memory_usage(self):
+        memory_usage = psutil.virtual_memory().percent
+        if memory_usage > 90:
+            print(f"Current memory usage: {memory_usage}%, Stop evaluation.")
+            return False
+        return True    
                 
     def set_treshold(self):
         num_thrshd_divi = self.cfg.num_thrs_divi
@@ -142,16 +149,7 @@ class Evaluate():
         # assign `num_gt` value in confusion_matrix
         dataloader = self.dataloader
         gt_classes = dict()
-        
-        import psutil
-
-        # 현재 RAM 사용량을 퍼센트로 확인
-        memory_usage = psutil.virtual_memory().percent
-        print(f"\n create_confusion_matrix Current memory usage: {memory_usage}%")
-        
         for i, val_data_batch in enumerate(dataloader):
-            memory_usage = psutil.virtual_memory().percent
-            print(f"{i}{i} Current memory usage: {memory_usage}%")
         
             # len(batch_gt_labels): batch_size
             batch_gt_bboxes = val_data_batch['gt_bboxes'].data[0]
@@ -428,85 +426,64 @@ class Evaluate():
     def get_mAP(self):  
         model = self.model
         dataloader = self.dataloader
-        import psutil
-
-        # 현재 RAM 사용량을 퍼센트로 확인
-        memory_usage = psutil.virtual_memory().percent
-        print(f"\n get_mAP Current memory usage: {memory_usage}%")
-        
-        for i, val_data_batch in enumerate(dataloader):     
-            import psutil
-
-            # 현재 RAM 사용량을 퍼센트로 확인
-            memory_usage = psutil.virtual_memory().percent
-            print(f"{i}{i} Current memory usage: {memory_usage}%")    
-            # len(batch_gt_labels): batch_size
+        for i, val_data_batch in enumerate(dataloader):    
+            if not self.check_memory_usage: return None
+                 
             batch_gt_bboxes = val_data_batch['gt_bboxes'].data[0]
             batch_gt_labels = val_data_batch['gt_labels'].data[0]
             batch_gt_masks = val_data_batch['gt_masks'].data[0]
-            batch_gts = []
-            for gt_bboxes, gt_labels, gt_masks in zip(batch_gt_bboxes, batch_gt_labels, batch_gt_masks):
-                batch_gts.append((gt_bboxes, gt_labels, gt_masks)) 
             
-            batch_filepath = []
-            for img_meta in val_data_batch['img_metas'].data[0]:
-                batch_filepath.append(img_meta['file_path'])
+            # get batch-ground truth data
+            batch_gts = list(zip(batch_gt_bboxes, batch_gt_labels, batch_gt_masks)) 
             
+            # get batch-file path
+            batch_filepath = [img_meta['file_path'] for img_meta in val_data_batch['img_metas'].data[0]]
+            
+            # get batch-inference result
             with torch.no_grad():
                 inference_detector_cfg = dict(model = model, 
                                               imgs_path = batch_filepath)
                 batch_results = inference_detector(**inference_detector_cfg) 
      
             for ground_truths, results, file_path in zip(batch_gts, batch_results, batch_filepath):
-                infer_dict, gt_dict, img = self.parsing_gt_infer_result(ground_truths, results, file_path)  
+                infer_bboxes, infer_labels, infer_masks = parse_inference_result(results) 
+                gt_bboxes, gt_labels, gt_masks = ground_truths
+                if infer_masks is not None:
+                    show_score_thr = self.cfg.get('show_score_thr', 0)
                 
-                self.get_num_pred_truth(gt_dict, infer_dict, num_window = self.cfg.num_window, img = img)
+                    assert infer_bboxes is not None and infer_bboxes.shape[1] == 5
+                    scores = infer_bboxes[:, -1]
+                    if show_score_thr > 0:
+                        inds = scores > show_score_thr
+                    else:
+                        inds = scores > 0.5
+                    infer_bboxes = infer_bboxes[inds, :]
+                    infer_labels = infer_labels[inds]
+                    if infer_masks is not None:
+                        infer_masks = infer_masks[inds, ...]
+                    
+                    infer_scores = infer_bboxes[:, -1]      # [num_instance]
+                    infer_bboxes = infer_bboxes[:, :4]      # [num_instance, [x_min, y_min, x_max, y_max]]
+
+                    infer_polygons = mask_to_polygon(infer_masks)
+                    gt_polygons = mask_to_polygon(gt_masks.masks)
+                else:   # detected nothing
+                    infer_scores = infer_bboxes = infer_polygons = gt_polygons = []
+                    
+                infer_dict = dict(bboxes = infer_bboxes,
+                                  polygons = infer_polygons,
+                                  labels = infer_labels,
+                                  score = infer_scores)
+                gt_dict = dict(bboxes = gt_bboxes,
+                               polygons = gt_polygons,
+                               labels = gt_labels)
+                
+                self.get_num_pred_truth(gt_dict, infer_dict, num_window = self.cfg.num_window, img = cv2.imread(file_path))
         
         self.compute_precision_recall()
-        return self.compute_mAP()
+        summary_dict = self.compute_mAP()
+        return summary_dict
     
-
-
-
-    def parsing_gt_infer_result(self, ground_truths, results, file_path):
-        infer_bboxes, infer_labels, infer_masks = parse_inference_result(results) 
-        gt_bboxes, gt_labels, gt_masks = ground_truths  
-        
-        if infer_masks is not None:
-            show_score_thr = self.cfg.get('show_score_thr', 0)
-           
-            assert infer_bboxes is not None and infer_bboxes.shape[1] == 5
-            scores = infer_bboxes[:, -1]
-            if show_score_thr > 0:
-                inds = scores > show_score_thr
-            else:
-                inds = scores > 0.5
-            infer_bboxes = infer_bboxes[inds, :]
-            infer_labels = infer_labels[inds]
-            if infer_masks is not None:
-                infer_masks = infer_masks[inds, ...]
-            
-            infer_scores = infer_bboxes[:, -1]      # [num_instance]
-            infer_bboxes = infer_bboxes[:, :4]      # [num_instance, [x_min, y_min, x_max, y_max]]
-
-            infer_polygons = mask_to_polygon(infer_masks)
-            gt_polygons = mask_to_polygon(gt_masks.masks)
-        else:   # detected nothing
-            infer_scores = infer_bboxes = infer_polygons = gt_polygons = []
-
-        
-        infer_dict = dict(bboxes = infer_bboxes,
-                          polygons = infer_polygons,
-                          labels = infer_labels,
-                          score = infer_scores)
-        gt_dict = dict(bboxes = gt_bboxes,
-                       polygons = gt_polygons,
-                       labels = gt_labels)
-            
-        img = cv2.imread(file_path)
-        
-        return infer_dict, gt_dict, img
-
 
     def get_num_pred_truth(self, gt_dict, infer_dict, num_window = 3, img = None):
         """
@@ -608,10 +585,13 @@ class Evaluate():
 
         dataloader = self.dataloader
         model = self.model
+        total_matchs_count = total_num_board_gt = 0
         for i, val_data_batch in enumerate(dataloader):
+            if not self.check_memory_usage: return None
             # len(batch_gt_bboxes): batch_size 
             batch_gt_bboxes = val_data_batch['gt_bboxes'].data[0]
             batch_gt_labels = val_data_batch['gt_labels'].data[0]
+            
             batch_gts = []
             for gt_bboxes, gt_labels in zip(batch_gt_bboxes, batch_gt_labels):
                 # append score
@@ -632,7 +612,6 @@ class Evaluate():
                                               imgs_path = batch_filepath)
                 batch_results = inference_detector(**inference_detector_cfg)  
 
-            total_matchs_count = total_num_board_gt = 0
             no_mask = False
             for filepath, results, ground_truths in zip(batch_filepath, batch_results, batch_gts):
                 bboxes, labels, masks = parse_inference_result(results) 
@@ -663,9 +642,9 @@ class Evaluate():
                     total_matchs_count += matchs_count
                     total_num_board_gt += num_board_gt
 
-            if no_mask:
-                return 0.0
-            return total_matchs_count/total_num_board_gt
+        if no_mask:
+            return 0.0
+        return total_matchs_count/total_num_board_gt
 
 
     
@@ -679,11 +658,11 @@ class Evaluate():
         get_info_gt = Get_info(bboxes_gt, labels_gt,
                                self.classes.copy(), 
                                score_thr = self.cfg.get('show_score_thr', 0.5))
-        license_board_gt_list = get_info_gt.get_board_info(infer = False)
+        license_board_gt_list = get_info_gt.get_board_info()
         
         num_board_gt = len(license_board_gt_list)
         if num_board_gt == 0:
-            _ = get_info_gt.get_board_info(infer = False, check = True)
+            _ = get_info_gt.get_board_info(check = True)
             raise ValueError(f"The GT image is not suitable for performing `compare_board_info`."
                             f"\nPlease check the validation image.  \n file_path: {filepath}")
               
