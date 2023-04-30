@@ -1,6 +1,7 @@
 import os, os.path as osp
 import time
 import logging
+import re
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
@@ -13,14 +14,14 @@ class Validation_Hook(Hook):
                  val_dataloader: DataLoader,
                  result_dir = None,
                  logger = None,
-                 run_infer = False,
+                 infer_cfg = dict(),
                  interval = ['iter', 50],
                  val_cfg = None,
                  **kwargs
                 ):
         self.iter_count = 1
         self.result_dir = result_dir
-        self.run_infer = run_infer
+        self.infer_cfg = infer_cfg
         self.unit, self.val_timing = interval[0], interval[1]
         self.val_dataloader = val_dataloader
         self.val_cfg = val_cfg
@@ -140,8 +141,8 @@ class Validation_Hook(Hook):
         summary = eval_.get_mAP()  
         if summary is None: return None
 
-        if self.run_infer:
-            correct_inference_rate = eval_.run_inference()
+        if self.infer_cfg.get('run', False):
+            correct_inference_rate = eval_.run_inference(compare_board = self.infer_cfg.get('compare_board', False))
             if correct_inference_rate is not None:
                 summary['EIR'] = correct_inference_rate
         
@@ -156,6 +157,12 @@ class Validation_Hook(Hook):
                       dv_mAP = summary['dv']['mAP'],
                       EIR = summary.get('EIR', None),
                       **log_dict_loss)
+ 
+        # To write tensorboard
+        runner.log_buffer.update_tensorboard(vars = dict(mAP = summary['normal']['mAP'],
+                                                    dv_mAP = summary['dv']['mAP'],
+                                                    EIR = summary.get('EIR', None),
+                                                    **log_dict_loss))
         
         if self.get_best_model:
             self.save_best_model(result = result, runner = runner)
@@ -199,10 +206,12 @@ class TensorBoard_Hook(Hook):
     def __init__(self,
                  pvc_dir = None,
                  out_dir = None,
+                 categories = dict(),
                  interval = ['iter', 50]):
         self.unit, self.timing = interval[0], interval[1]
         self.pvc_dir = pvc_dir
         self.writer_result_dir = SummaryWriter(log_dir = out_dir)    
+        self.categories = categories
 
     def after_train_iter(self, runner) -> None: 
         if self.unit == 'iter' and\
@@ -222,8 +231,24 @@ class TensorBoard_Hook(Hook):
         self.writer_result_dir.add_scalar(board_path, value, runner._iter)
             
             
-    def write_to_board(self, runner):   
-        log_dict = runner.log_buffer.get_last()
+    def write_to_board(self, runner):    
+        categories = self.categories   
+        categories_list = list(categories.keys())
+        def separate_category(text):
+            pattern = r'([a-zA-Z0-9]+)_([a-zA-Z0-9_]+)'
+            match = re.match(pattern, text)
+            if match:
+                category, name = match.groups()
+                if category in categories_list:
+                    return category, name
+                else:
+                    return None, text
+            else:
+                return None, text
+        
+        
+         
+        log_dict = runner.log_buffer.get_last_tensorboard()
         if log_dict.get("data_time", None) is not None: del log_dict['data_time']
         if log_dict.get("time", None) is not None: del log_dict['time']
         
@@ -231,37 +256,31 @@ class TensorBoard_Hook(Hook):
         
         log_dict['else_lr'] = cur_lr
         
-        if len(runner.val_result)>0:
-            log_dict['acc_mAP'] = runner.val_result[-1]['mAP']
-                    
+        
+        continue_flag = False         
         for key, item in log_dict.items():
-            category = key.split("_")[0]
-            name = key.split("_")[-1]
+            if item is None:
+                item = 0
+            category, name = separate_category(key)
+            if category is None: category = key.split('_')[0]
+            
+            for cfged_category, key_name_list in categories.items():
+                if name in key_name_list:
+                    self.writer_meta(f"{cfged_category}/{name}", item, runner)
+                    continue_flag = True
+                    break
+            if continue_flag: 
+                continue_flag = False
+                continue
             
             if category == "loss":
                 if key == "loss": 
                     name = 'total_loss'
-                self.writer_meta(f"Loss/{name}", item, runner)
-                    
-            elif category == "acc":
-                self.writer_meta(f"Acc/{name}", item, runner)
+                self.writer_meta(f"loss/{name}", item, runner)
                 
             else:
                 self.writer_meta(f"else/{name}", item, runner)
-                
-                
-        memory = self.get_memory_info(runner)
-        
-        
-        for key_i, item_i in memory.items():
-            for key_j, item_j in item_i.items():
-                if key_j == "percent": 
-                    item_j = float(item_j.split("%")[0])
-                elif key_j in ["max_allocated_tensor", "leakage", "free", "total"]: continue
-                
- 
-                self.writer_meta(f"memory/{key_i}_{key_j}", item_j, runner)
-             
+                         
     
     def before_run(self, runner):
         if runner.in_pipeline: 
