@@ -478,7 +478,25 @@ class LogBuffer:
         self.n_history = dict()
         self.output = dict()
         self.log_output = dict()
+        self.tensorboard = dict()
         self.ready = False
+        
+    def clear_tensorboard(self):
+        self.tensorboard.clear()
+    
+    def update_tensorboard(self, vars:dict):
+        assert isinstance(vars, dict)
+        for key, var in vars.items():
+            if key not in self.tensorboard:
+                self.tensorboard[key] = []
+            self.tensorboard[key].append(var)
+    
+    def get_last_tensorboard(self):
+        output = dict()
+        for key, var in self.tensorboard.items():
+            output[key] = var[-1]
+        return output
+
 
     def clear(self) -> None:
         self.val_history.clear()
