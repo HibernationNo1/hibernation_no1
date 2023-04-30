@@ -208,7 +208,7 @@ class Evaluate():
             mAP = sum_AP/len(class_ap.keys())
             if key == 'classes_AP': summary_dict['normal']['mAP'] = round(mAP, 4) 
             elif key == 'classes_dv_AP': summary_dict['dv']['mAP'] = round(mAP, 4) 
-
+        
         if (self.cfg.get('save_plot', False)) and (self.output_path is not None):
             if not osp.isdir(self.output_path):
                 raise OSError(f"The path is not exist!  \n path: {self.output_path}")
@@ -427,7 +427,7 @@ class Evaluate():
         model = self.model
         dataloader = self.dataloader
         for i, val_data_batch in enumerate(dataloader):    
-            if not self.check_memory_usage: return None
+            if not self.check_memory_usage(): return None
                  
             batch_gt_bboxes = val_data_batch['gt_bboxes'].data[0]
             batch_gt_labels = val_data_batch['gt_labels'].data[0]
@@ -576,18 +576,21 @@ class Evaluate():
         self.confusion_matrix = confusion_matrix
 
 
-    def run_inference(self):
+    def run_inference(self, compare_board):
         # If self.output_path is None then the directory does not yet exist.
         if self.output_path is not None:
             img_result_dir = osp.join(self.output_path, self.img_result_dir)
             os.makedirs(img_result_dir, exist_ok = True)
-        else: return None
+        else: 
+            print(f"Attributes: output_path is None")
+            return None
 
         dataloader = self.dataloader
         model = self.model
         total_matchs_count = total_num_board_gt = 0
         for i, val_data_batch in enumerate(dataloader):
-            if not self.check_memory_usage: return None
+            if not self.check_memory_usage(): return None
+            
             # len(batch_gt_bboxes): batch_size 
             batch_gt_bboxes = val_data_batch['gt_bboxes'].data[0]
             batch_gt_labels = val_data_batch['gt_labels'].data[0]
@@ -635,12 +638,14 @@ class Evaluate():
 
                 # Compute the ratio of how accurately the board's information was inferred 
                 # by comparing the ground truth and the inference results.
-                if self.cfg.get('compare_board_info', False): 
+                if compare_board: 
                     bboxes_gt, labels_gt = ground_truths 
                     matchs_count, num_board_gt = self.compare_board_info(bboxes, labels, bboxes_gt, labels_gt, 
                                                                      filepath = filepath)
                     total_matchs_count += matchs_count
                     total_num_board_gt += num_board_gt
+        
+        if not compare_board: return None
 
         if no_mask:
             return 0.0
