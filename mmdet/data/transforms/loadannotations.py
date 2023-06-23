@@ -7,8 +7,8 @@ import torch
 
 from sub_module.mmdet.data.transforms.compose import PIPELINES
 from sub_module.mmdet.data.transforms.utils import imresize, imrescale, rescale_size, imflip
+from sub_module.mmdet.data.transforms.roialignfunction import RoIAlignFunction
 
-from mmcv.ops.roi_align import RoIAlignFunction
 roi_align = RoIAlignFunction.apply
 
 
