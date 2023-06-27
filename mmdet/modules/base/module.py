@@ -167,3 +167,15 @@ class ModuleList(BaseModule, nn.ModuleList):
                  init_cfg: Optional[dict] = None):
         BaseModule.__init__(self, init_cfg)
         nn.ModuleList.__init__(self, modules)
+        
+        
+class Sequential(BaseModule, nn.Sequential):
+    """Sequential module in openmmlab.
+
+    Args:
+        init_cfg (dict, optional): Initialization config dict.
+    """
+
+    def __init__(self, *args, init_cfg: Optional[dict] = None):
+        BaseModule.__init__(self, init_cfg)
+        nn.Sequential.__init__(self, *args)
