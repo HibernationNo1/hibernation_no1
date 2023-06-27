@@ -583,7 +583,7 @@ class BBoxHead(BaseModule):
                 bboxes = torch.where(bboxes > max_xy, max_xy, bboxes)
 
         # Replace multiclass_nms with ONNX::NonMaxSuppression in deployment
-        from mmdet.core.export import add_dummy_nms_for_onnx
+        from sub_module.mmdet.modules.detector.utils import add_dummy_nms_for_onnx
         max_output_boxes_per_class = cfg.nms.get('max_output_boxes_per_class',
                                                  cfg.max_per_img)
         iou_threshold = cfg.nms.get('iou_threshold', 0.5)

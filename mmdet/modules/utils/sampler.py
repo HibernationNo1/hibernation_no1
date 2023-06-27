@@ -117,10 +117,10 @@ class RandomSampler(BaseSampler):
                  neg_pos_ub=-1,
                  add_gt_as_proposals=True,
                  **kwargs):
-        from mmdet.core.bbox import demodata
+        from sub_module.mmdet.utils import ensure_rng
         super(RandomSampler, self).__init__(num, pos_fraction, neg_pos_ub,
                                             add_gt_as_proposals)
-        self.rng = demodata.ensure_rng(kwargs.get('rng', None))
+        self.rng = ensure_rng(kwargs.get('rng', None))
 
     def random_choice(self, gallery, num):
         """Random select some elements from the gallery.
@@ -284,10 +284,11 @@ class SamplingResult():		# (util_mixins.NiceRepr)
             >>> self = SamplingResult.random()
             >>> print(self.__dict__)
         """
-        from mmdet.core.bbox import demodata
-        from mmdet.core.bbox.assigners.assign_result import AssignResult
-        from mmdet.core.bbox.samplers.random_sampler import RandomSampler
-        rng = demodata.ensure_rng(rng)
+        from sub_modules.mmdet.utils import ensure_rng, random_boxes
+        from sub_module.mmdet.modules.utils.sampler import RandomSampler
+        from sub_modules.mmdet.modules.utils.assigner import AssignResult
+        
+        rng = ensure_rng(rng)
 
         # make probabilistic?
         num = 32
@@ -297,8 +298,8 @@ class SamplingResult():		# (util_mixins.NiceRepr)
         assign_result = AssignResult.random(rng=rng, **kwargs)
 
         # Note we could just compute an assignment
-        bboxes = demodata.random_boxes(assign_result.num_preds, rng=rng)
-        gt_bboxes = demodata.random_boxes(assign_result.num_gts, rng=rng)
+        bboxes = random_boxes(assign_result.num_preds, rng=rng)
+        gt_bboxes = random_boxes(assign_result.num_gts, rng=rng)
 
         if rng.rand() > 0.2:
             # sometimes algorithms squeeze their data, be robust to that
