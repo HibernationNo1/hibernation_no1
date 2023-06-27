@@ -6,6 +6,42 @@ from sub_module.mmdet.modules.base.module import BaseModule
 from sub_module.mmdet.utils import force_fp32
 
 
+def get_k_for_topk(k, size):
+    """Get k of TopK for onnx exporting.
+
+    The K of TopK in TensorRT should not be a Tensor, while in ONNX Runtime
+      it could be a Tensor.Due to dynamic shape feature, we have to decide
+      whether to do TopK and what K it should be while exporting to ONNX.
+    If returned K is less than zero, it means we do not have to do
+      TopK operation.
+
+    Args:
+        k (int or Tensor): The set k value for nms from config file.
+        size (Tensor or torch.Size): The number of elements of \
+            TopK's input tensor
+    Returns:
+        tuple: (int or Tensor): The final K for TopK.
+    """
+    ret_k = -1
+    if k <= 0 or size <= 0:
+        return ret_k
+    if torch.onnx.is_in_onnx_export():
+        is_trt_backend = os.environ.get('ONNX_BACKEND') == 'MMCVTensorRT'
+        if is_trt_backend:
+            # TensorRT does not support dynamic K with TopK op
+            if 0 < k < size:
+                ret_k = k
+        else:
+            # Always keep topk op for dynamic input in onnx for ONNX Runtime
+            ret_k = torch.where(k < size, k, size)
+    elif k < size:
+        ret_k = k
+    else:
+        # ret_k is -1
+        pass
+    return ret_k
+
+
 def select_single_mlvl(mlvl_tensors, batch_id, detach=True):
     """Extract a multi-scale single image tensor from a multi-scale batch
     tensor based on batch index.
@@ -480,7 +516,6 @@ class BaseDenseHead(BaseModule, metaclass=ABCMeta):
                                           1).reshape(batch_size, -1, 4)
             priors = priors.expand(batch_size, -1, priors.size(-1))
             # Get top-k predictions
-            from mmdet.core.export import get_k_for_topk
             nms_pre = get_k_for_topk(nms_pre_tensor, bbox_pred.shape[1])
             if nms_pre > 0:
 
@@ -532,7 +567,7 @@ class BaseDenseHead(BaseModule, metaclass=ABCMeta):
 
         # Replace multiclass_nms with ONNX::NonMaxSuppression in deployment
 
-        from mmdet.core.export import add_dummy_nms_for_onnx
+        from sub_module.mmdet.modules.detector.utils import add_dummy_nms_for_onnx
 
         if not self.use_sigmoid_cls:
             batch_scores = batch_scores[..., :self.num_classes]
