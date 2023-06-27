@@ -1,5 +1,12 @@
+import torch
+import torch.nn as nn
+from torch.nn.modules.utils import _pair
+
 from torch.autograd import Function
 from torch.autograd.function import once_differentiable
+
+from sub_module.mmdet.utils import load_ext
+ext_module = load_ext('_ext',['roi_align_forward', 'roi_align_backward'])
 
 class RoIAlignFunction(Function):
 
