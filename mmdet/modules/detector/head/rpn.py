@@ -255,7 +255,7 @@ class RPNHead(AnchorHead):
         batch_bboxes, batch_scores = super(RPNHead, self).onnx_export(
             cls_scores, bbox_preds, img_metas=img_metas, with_nms=False)
         # Use ONNX::NonMaxSuppression in deployment
-        from mmdet.core.export import add_dummy_nms_for_onnx
+        from sub_module.mmdet.modules.detector.utils import add_dummy_nms_for_onnx
         cfg = copy.deepcopy(self.test_cfg)
         score_threshold = cfg.nms.get('score_thr', 0.0)
         nms_pre = cfg.get('deploy_nms_pre', -1)
