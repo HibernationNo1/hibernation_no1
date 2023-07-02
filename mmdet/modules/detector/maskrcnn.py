@@ -1,7 +1,7 @@
 
 from sub_module.mmdet.modules.base.module import BaseModule
 from sub_module.mmdet.registry import build_from_cfg
-from sub_module.mmdet.modules.register_module import BACKBORN, NECK, RPN_HEAD, ROI_HEAD
+from sub_module.mmdet.modules.register_module import BACKBONES, NECKS, RPN_HEADS, ROI_HEADS
 
 import torch
 
@@ -13,12 +13,11 @@ class MaskRCNN(BaseModule):
                  roi_head=None,
                  init_cfg=None):
         super(MaskRCNN, self).__init__(init_cfg)
-
-        self.backbone = build_from_cfg(backbone, BACKBORN)   
-        self.neck = build_from_cfg(neck, NECK)   
-        self.rpn_head = build_from_cfg(rpn_head, RPN_HEAD)   
+        self.backbone = build_from_cfg(backbone, BACKBONES)   
+        self.neck = build_from_cfg(neck, NECKS)   
+        self.rpn_head = build_from_cfg(rpn_head, RPN_HEADS)   
         
-        self.roi_head = build_from_cfg(roi_head, ROI_HEAD)   
+        self.roi_head = build_from_cfg(roi_head, ROI_HEADS)   
             
         self.CLASSES = None
         self.rpn_proposal_cfg = rpn_head.train_cfg.get('rpn_proposal', None)

@@ -201,11 +201,20 @@ prefixes = {'local': load_from_local,
             'http://': load_from_http,
             'https://': load_from_http }
 
-def load_checkpoint(path: str, map_location='cpu', logger = None):
+def load_checkpoint(path: str, current_dir = None, map_location='cpu', logger = None):
+    """
+        path: file path of model (.pth format)
+        current_dir: confirm current dir and load model from `path`, if model does not exist in current dir.
+    """
     for p, func in prefixes.items():
         if p == 'local':
             p = osp.basename(os.getcwd())
+    
         if len(re.findall(p, path))==1:
             checkpoint = func(path, map_location= map_location, logger = logger)
-  
-    return checkpoint 
+        elif p == current_dir: # confirm current dir
+            checkpoint = func(path, map_location= map_location, logger = logger)
+            
+    return checkpoint
+            
+             

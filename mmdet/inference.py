@@ -9,7 +9,10 @@ from sub_module.mmdet.scatter import parallel_scatter
 from sub_module.mmdet.checkpoint import load_checkpoint     
 
 def build_detector(cfg, model_path, device='cuda:0', logger = None):
-    checkpoint = load_checkpoint(model_path, logger = logger)
+    checkpoint = load_checkpoint(model_path, 
+                                 current_dir = cfg.get(f"current_dir", None),
+                                 map_location = device.split(":")[0],
+                                 logger = logger)
     state_dict = checkpoint['state_dict']
     
     state_dict = checkpoint['state_dict']
