@@ -11,17 +11,17 @@ from inspect import getfullargspec
 from typing import Callable, Iterable, List, Optional
 
 if  torch.version.cuda == '11.3':
-	ext_v = '113'		# ext/113/_ext.cpython-38-x86_64-linux-gnu.so is 151.59 MB, so manage it with `git lfs`
+    ext_v = '113'		# ext/113/_ext.cpython-38-x86_64-linux-gnu.so is 151.59 MB, so manage it with `git lfs`
 elif torch.version.cuda == '11.2':
     ext_v = '112'
 else:
     raise KeyError(f"Cuda version is not available. \n torch.version.cuda: {torch.version.cuda}")
     
 def load_ext(name, funcs):
-	ext = importlib.import_module(f"sub_module.mmdet.ext.{ext_v}._ext")
-	for fun in funcs:
-		assert hasattr(ext, fun), f'{fun} miss in module {name}'
-	return ext
+    ext = importlib.import_module(f"sub_module.mmdet.ext.{ext_v}._ext")
+    for fun in funcs:
+        assert hasattr(ext, fun), f'{fun} miss in module {name}'
+    return ext
 
 def ensure_rng(rng=None):
     """Coerces input into a random number generator.
