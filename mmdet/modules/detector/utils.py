@@ -465,3 +465,15 @@ def add_dummy_nms_for_onnx(boxes,
     scores = scores.unsqueeze(2)
     dets = torch.cat([boxes, scores], dim=2)
     return dets, labels
+
+def unmap(data, count, inds, fill=0):
+    """Unmap a subset of item (data) back to the original set of items (of size
+    count)"""
+    if data.dim() == 1:
+        ret = data.new_full((count, ), fill)
+        ret[inds.type(torch.bool)] = data
+    else:
+        new_size = (count, ) + data.size()[1:]
+        ret = data.new_full(new_size, fill)
+        ret[inds.type(torch.bool), :] = data
+    return ret
