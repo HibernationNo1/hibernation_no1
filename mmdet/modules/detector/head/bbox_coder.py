@@ -3,6 +3,8 @@ import torch
 from abc import ABCMeta, abstractmethod
 
 
+
+
 class BaseBBoxCoder(metaclass=ABCMeta):
     """Base bounding box coder."""
 
@@ -17,6 +19,52 @@ class BaseBBoxCoder(metaclass=ABCMeta):
     def decode(self, bboxes, bboxes_pred):
         """Decode the predicted bboxes according to prediction and base
         boxes."""
+
+
+def bbox2delta(proposals, gt, means=(0., 0., 0., 0.), stds=(1., 1., 1., 1.)):
+    """Compute deltas of proposals w.r.t. gt.
+
+    We usually compute the deltas of x, y, w, h of proposals w.r.t ground
+    truth bboxes to get regression target.
+    This is the inverse function of :func:`delta2bbox`.
+
+    Args:
+        proposals (Tensor): Boxes to be transformed, shape (N, ..., 4)
+        gt (Tensor): Gt bboxes to be used as base, shape (N, ..., 4)
+        means (Sequence[float]): Denormalizing means for delta coordinates
+        stds (Sequence[float]): Denormalizing standard deviation for delta
+            coordinates
+
+    Returns:
+        Tensor: deltas with shape (N, 4), where columns represent dx, dy,
+            dw, dh.
+    """
+    assert proposals.size() == gt.size()
+
+    proposals = proposals.float()
+    gt = gt.float()
+    px = (proposals[..., 0] + proposals[..., 2]) * 0.5
+    py = (proposals[..., 1] + proposals[..., 3]) * 0.5
+    pw = proposals[..., 2] - proposals[..., 0]
+    ph = proposals[..., 3] - proposals[..., 1]
+
+    gx = (gt[..., 0] + gt[..., 2]) * 0.5
+    gy = (gt[..., 1] + gt[..., 3]) * 0.5
+    gw = gt[..., 2] - gt[..., 0]
+    gh = gt[..., 3] - gt[..., 1]
+
+    dx = (gx - px) / pw
+    dy = (gy - py) / ph
+    dw = torch.log(gw / pw)
+    dh = torch.log(gh / ph)
+    deltas = torch.stack([dx, dy, dw, dh], dim=-1)
+
+    means = deltas.new_tensor(means).unsqueeze(0)
+    stds = deltas.new_tensor(stds).unsqueeze(0)
+    deltas = deltas.sub_(means).div_(stds)
+
+    return deltas
+
 
 
 

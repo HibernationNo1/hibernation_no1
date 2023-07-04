@@ -1,17 +1,39 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.modules.utils import _pair
-from sub_module.mmdet.utils import force_fp32
+from sub_module.mmdet.utils import force_fp32, multi_apply
 
 
 from sub_module.mmdet.modules.base.module import BaseModule
 from sub_module.mmdet.modules.detector.head.bbox_coder import  DeltaXYWHBBoxCoder
 from sub_module.mmdet.modules.loss.crossentropyloss import CrossEntropyLoss
 from sub_module.mmdet.modules.loss.L1loss import L1Loss
+from sub_module.mmdet.modules.loss.accuracy import accuracy
 
 from sub_module.mmdet.modules.detector.utils import batched_nms, multiclass_nms
 
+def bbox2roi(bbox_list):
+    """Convert a list of bboxes to roi format.
+
+    Args:
+        bbox_list (list[Tensor]): a list of bboxes corresponding to a batch
+            of images.
+
+    Returns:
+        Tensor: shape (n, 5), [batch_ind, x1, y1, x2, y2]
+    """
+    rois_list = []
+    for img_id, bboxes in enumerate(bbox_list):
+        if bboxes.size(0) > 0:
+            img_inds = bboxes.new_full((bboxes.size(0), 1), img_id)
+            rois = torch.cat([img_inds, bboxes[:, :4]], dim=-1)
+        else:
+            rois = bboxes.new_zeros((0, 5))
+        rois_list.append(rois)
+    rois = torch.cat(rois_list, 0)
+    return rois
     
 def bbox2result(bboxes, labels, num_classes):
     """Convert detection results to a list of numpy arrays.

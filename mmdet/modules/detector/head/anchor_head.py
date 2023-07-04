@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch.nn.modules.utils import _pair
 
@@ -5,12 +6,58 @@ from sub_module.mmdet.modules.detector.head.base_dense_head import BaseDenseHead
 
 from sub_module.mmdet.modules.detector.head.rpn_bbox import BBoxTestMixin
 from sub_module.mmdet.modules.detector.head.bbox_coder import  DeltaXYWHBBoxCoder
+from sub_module.mmdet.modules.detector.utils import unmap
 from sub_module.mmdet.modules.loss.crossentropyloss import CrossEntropyLoss
 from sub_module.mmdet.modules.loss.L1loss import L1Loss
 from sub_module.mmdet.modules.utils.assigner import MaxIoUAssigner
 from sub_module.mmdet.modules.utils.sampler import RandomSampler
 
 from sub_module.mmdet.utils import force_fp32, multi_apply
+
+
+def images_to_levels(target, num_levels):
+    """Convert targets by image to targets by feature level.
+
+    [target_img0, target_img1] -> [target_level0, target_level1, ...]
+    """
+    target = torch.stack(target, 0)
+    level_targets = []
+    start = 0
+    for n in num_levels:
+        end = start + n
+        # level_targets.append(target[:, start:end].squeeze(0))
+        level_targets.append(target[:, start:end])
+        start = end
+    return level_targets
+
+
+def anchor_inside_flags(flat_anchors,
+                        valid_flags,
+                        img_shape,
+                        allowed_border=0):
+    """Check whether the anchors are inside the border.
+
+    Args:
+        flat_anchors (torch.Tensor): Flatten anchors, shape (n, 4).
+        valid_flags (torch.Tensor): An existing valid flags of anchors.
+        img_shape (tuple(int)): Shape of current image.
+        allowed_border (int, optional): The border to allow the valid anchor.
+            Defaults to 0.
+
+    Returns:
+        torch.Tensor: Flags indicating whether the anchors are inside a \
+            valid range.
+    """
+    img_h, img_w = img_shape[:2]
+    if allowed_border >= 0:
+        inside_flags = valid_flags & \
+            (flat_anchors[:, 0] >= -allowed_border) & \
+            (flat_anchors[:, 1] >= -allowed_border) & \
+            (flat_anchors[:, 2] < img_w + allowed_border) & \
+            (flat_anchors[:, 3] < img_h + allowed_border)
+    else:
+        inside_flags = valid_flags
+    return inside_flags
 
 class AnchorHead(BaseDenseHead, BBoxTestMixin):
     """Anchor-based head (RPN, RetinaNet, SSD, etc.).

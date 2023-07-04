@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from sub_module.mmdet.modules.loss.utils import weight_reduce_loss
+
 class CrossEntropyLoss(nn.Module):
 
     def __init__(self,
@@ -156,7 +158,28 @@ def cross_entropy(pred,
 
     return loss
 
-    
+
+def _expand_onehot_labels(labels, label_weights, label_channels, ignore_index):
+    """Expand onehot labels to match the size of prediction."""
+    bin_labels = labels.new_full((labels.size(0), label_channels), 0)
+    valid_mask = (labels >= 0) & (labels != ignore_index)
+    inds = torch.nonzero(
+        valid_mask & (labels < label_channels), as_tuple=False)
+
+    if inds.numel() > 0:
+        bin_labels[inds, labels[inds]] = 1
+
+    valid_mask = valid_mask.view(-1, 1).expand(labels.size(0),
+                                               label_channels).float()
+    if label_weights is None:
+        bin_label_weights = valid_mask
+    else:
+        bin_label_weights = label_weights.view(-1, 1).repeat(1, label_channels)
+        bin_label_weights *= valid_mask
+
+    return bin_labels, bin_label_weights, valid_mask
+
+
 def binary_cross_entropy(pred,
                          label,
                          weight=None,
