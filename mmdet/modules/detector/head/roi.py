@@ -5,12 +5,14 @@
 # def StandardRoIHead(**cfg):
 #     return _StandardRoIHead(**cfg)
 
+import torch
+
 from abc import ABCMeta, abstractmethod
 
 from sub_module.mmdet.modules.detector.head.roi_modules import BBoxTestMixin_ROI, MaskTestMixin_ROI
 from sub_module.mmdet.modules.base.module import BaseModule
 from sub_module.mmdet.modules.detector.head.roi_extractor import SingleRoIExtractor
-from sub_module.mmdet.modules.detector.head.roi_bbox import Shared2FCBBoxHead, bbox2result
+from sub_module.mmdet.modules.detector.head.roi_bbox import Shared2FCBBoxHead, bbox2result, bbox2roi
 from sub_module.mmdet.modules.detector.head.mask_head import FCNMaskHead
 from sub_module.mmdet.modules.utils.assigner import MaxIoUAssigner
 from sub_module.mmdet.modules.utils.sampler import RandomSampler
