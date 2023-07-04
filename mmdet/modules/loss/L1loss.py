@@ -1,6 +1,26 @@
 import torch
 import torch.nn as nn
 
+from sub_module.mmdet.modules.loss.utils import weighted_loss
+
+@weighted_loss
+def l1_loss(pred, target):
+    """L1 loss.
+
+    Args:
+        pred (torch.Tensor): The prediction.
+        target (torch.Tensor): The learning target of the prediction.
+
+    Returns:
+        torch.Tensor: Calculated loss
+    """
+    if target.numel() == 0:
+        return pred.sum() * 0
+
+    assert pred.size() == target.size()
+    loss = torch.abs(pred - target)
+    return loss
+
 
 class L1Loss(nn.Module):
     """L1 loss.
